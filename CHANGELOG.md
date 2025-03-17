@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.8.8] - 2025-03-13
+## [0.9.1] - 2025-03-13
 
-- Re-release AI Marketplace Monitor under a AGLP license
+- Re-release AI Marketplace Monitor under a AGPL license
 
 ## [0.8.8] - 2025-03-12
 

@@ -174,13 +174,6 @@ proxy_username = 'adfa'
 proxy_password = 'fadfadf'
 """
 
-monitor_invalid_proxy_server_cfg = """
-[monitor]
-proxy_server = 'fdaf.fadfd.com'
-proxy_username = 'adfa'
-proxy_password = 'fadfadf'
-"""
-
 licensed_monitor_cfg = """
 [monitor]
 proxy_server = 'https://fdaf.fadfd.com'
@@ -254,15 +247,8 @@ proxy_password = 'fadfadf'
         (base_marketplace_cfg + "\na=1\n" + base_item_cfg + base_user_cfg, False),
         (base_marketplace_cfg + base_item_cfg + "\na=1\n" + base_user_cfg, False),
         (base_marketplace_cfg + base_item_cfg + base_user_cfg + "\na=1\n", False),
-        (base_marketplace_cfg + base_item_cfg + base_user_cfg + monitor_cfg, False),
+        (base_marketplace_cfg + base_item_cfg + base_user_cfg + monitor_cfg, True),
         (base_marketplace_cfg + base_item_cfg + base_user_cfg + licensed_monitor_cfg, True),
-        (
-            base_marketplace_cfg
-            + base_item_cfg
-            + base_user_cfg
-            + monitor_invalid_proxy_server_cfg,
-            False,
-        ),
     ],
 )
 def test_config(config_file: Callable, config_content: str, acceptable: bool) -> None:
