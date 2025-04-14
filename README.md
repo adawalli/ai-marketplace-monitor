@@ -303,6 +303,26 @@ pushover_api_token = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
 notify_with = 'pushover'
 ```
 
+By default, notifications include only the **title**, **price**, **location**, and **AI-generated comments** (if enabled).
+To include the **listing description**, you can add the `with_description` option to your config.
+
+You can set `with_description` to:
+
+- `True` — to include the **full description**.
+- `False` — to exclude the description (default behavior).
+- A **number** — to include only the **first N characters** of the description.
+
+For example:
+
+```toml
+[user.me]
+pushover_user_key = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+pushover_api_token = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+with_description = 100
+```
+
+This will include up to the first 100 characters of each listing's description in your notifications.
+
 ### Adjust prompt and notification level
 
 _ai-marketplace-monitor_ asks AI services to evaluate listings against the criteria that you specify with prompts in four parts:

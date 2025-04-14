@@ -156,12 +156,16 @@ pushbullet_token = "yyyyyyyyyyyyyyyy"
 
 #### Common Notification settings
 
-| Option        | Requirement | DataType | Description                                                       |
-| ------------- | ----------- | -------- | ----------------------------------------------------------------- |
-| `max_retries` | Optional    | Integer  | Number of attempts to retry a notification. Defaults to `5`.      |
-| `retry_delay` | Optional    | Integer  | Time in seconds to wait between retry attempts. Defaults to `60`. |
+| Option             | Requirement | DataType        | Description                                                                                                                      |
+| ------------------ | ----------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `max_retries`      | Optional    | Integer         | Number of attempts to retry a notification. Defaults to `5`.                                                                     |
+| `retry_delay`      | Optional    | Integer         | Time in seconds to wait between retry attempts. Defaults to `60`.                                                                |
+| `with_description` | Optional    | Boolean/Integer | Whether or not include description of listings. If a number is given, the description will be truncated to the specified length. |
 
-These settings are shared across all notification methods. For example, if you are notifying with `notify_with=['gmail', 'pushbullet']`, the same `max_retries` and `retry_delay` will apply to both methods.
+Note that
+
+1. These settings are shared across all notification methods. For example, if you are notifying with `notify_with=['gmail', 'pushbullet']`, the same `max_retries` and `retry_delay` will apply to both methods.
+2. Support for `with_description` vary across notification methods due to their own limitations and strenght. For example, email notification will always include description.
 
 #### Pushbullet notification
 

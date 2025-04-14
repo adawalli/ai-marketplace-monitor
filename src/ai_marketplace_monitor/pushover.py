@@ -32,34 +32,56 @@ class PushoverNotificationConfig(PushNotificationConfig):
             raise ValueError("user requires an non-empty pushover_api_token.")
         self.pushover_api_token = self.pushover_api_token.strip()
 
+    def handle_message_format(self: "PushoverNotificationConfig") -> None:
+        self.message_format = "html"
+
     def send_message(
         self: "PushoverNotificationConfig",
         title: str,
         message: str,
         logger: Logger | None = None,
     ) -> bool:
-        msg = f"{title}\n\n{message}\n\nSent by https://github.com/BoPeng/ai-marketplace-monitor"
-        conn = http.client.HTTPSConnection("api.pushover.net:443")
-        conn.request(
-            "POST",
-            "/1/messages.json",
-            urllib.parse.urlencode(
-                {
-                    "token": self.pushover_api_token,
-                    "user": self.pushover_user_key,
-                    "message": msg,
-                }
-            ),
-            {"Content-type": "application/x-www-form-urlencoded"},
-        )
+        # pushover has a limit of 1024 characters, so we will need to split the message
+        # into multiple ones, by
+        # 1. split by '\n\n' which separates listings
+        # 2. put as many listings as possible into one message and continue
+        msgs: List[str] = []
+        signature = 'Sent by <a href="https://github.com/BoPeng/ai-marketplace-monitor">AI Marketplace Monitor</a>'
+        for pieces in [*message.split("\n\n"), signature]:
+            if len(pieces) > 1024:
+                pieces = pieces[:1024]
+            if not msgs:
+                msgs.append(pieces)
+                continue
+            if len(msgs[-1] + "<br><br>" + pieces) > 1024:
+                msgs.append(pieces)
+            else:
+                msgs[-1] += "<br><br>" + pieces
 
-        output = conn.getresponse().read().decode("utf-8")
-        data = json.loads(output)
-        if data["status"] != 1:
-            raise RuntimeError(output)
-        else:
-            if logger:
-                logger.info(
-                    f"""{hilight("[Notify]", "succ")} Sent {self.name} a message {hilight(msg)}"""
-                )
-            return True
+        conn = http.client.HTTPSConnection("api.pushover.net:443")
+        for idx, msg in enumerate(msgs):
+            conn.request(
+                "POST",
+                "/1/messages.json",
+                urllib.parse.urlencode(
+                    {
+                        "token": self.pushover_api_token,
+                        "user": self.pushover_user_key,
+                        "message": msg,
+                        "title": title + (f" ({idx+1}/{len(msgs)})" if len(msgs) > 1 else ""),
+                        "html": 1,
+                    }
+                ),
+                {"Content-type": "application/x-www-form-urlencoded"},
+            )
+
+            output = conn.getresponse().read().decode("utf-8")
+            data = json.loads(output)
+            if data["status"] != 1:
+                raise RuntimeError(output)
+
+        if logger:
+            logger.info(
+                f"""{hilight("[Notify]", "succ")} Sent {self.name} a message {hilight(msg)}"""
+            )
+        return True
