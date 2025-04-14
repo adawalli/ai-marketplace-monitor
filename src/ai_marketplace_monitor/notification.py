@@ -175,47 +175,50 @@ class PushNotificationConfig(NotificationConfig):
                 desc = listing.description[: self.with_description] + "..."
 
             if self.message_format == "plain_text":
+                desc_newline = "\n" if desc else ""
                 msg = (
                     (
                         f"{listing.title}\n{listing.price}, {listing.location}\n"
-                        f"{listing.post_url.split('?')[0]}{'\n' if desc else ''}{desc}"
+                        f"{listing.post_url.split('?')[0]}{desc_newline}{desc}"
                     )
                     if rating.comment == AIResponse.NOT_EVALUATED
                     else (
                         f"[{rating.conclusion} ({rating.score})] {listing.title}\n"
                         f"{listing.price}, {listing.location}\n"
-                        f"{listing.post_url.split('?')[0]}\n{desc}{'\n' if desc else ''}"
+                        f"{listing.post_url.split('?')[0]}\n{desc}{desc_newline}"
                         f"AI: {rating.comment}"
                     )
                 )
             elif self.message_format == "markdown":
+                desc_newline = "\n" if desc else ""
                 msg = (
                     (
                         f"[**{listing.title}**]({listing.post_url.split('?')[0]})\n"
                         f"{listing.price}, {listing.location}"
-                        f"{'\n' if desc else ''}{desc}"
+                        f"{desc_newline}{desc}"
                     )
                     if rating.comment == AIResponse.NOT_EVALUATED
                     else (
                         f"[{rating.conclusion} ({rating.score})] "
                         f"[**{listing.title}**]({listing.post_url.split('?')[0]})\n"
                         f"{listing.price}, {listing.location}\n"
-                        f"{desc}{'\n' if desc else ''}"
+                        f"{desc}{desc_newline}"
                         f"**AI**: {rating.comment}"
                     )
                 )
             elif self.message_format == "html":
+                desc_newline = "<br>" if desc else ""
                 msg = (
                     (
                         f"""<a href="{listing.post_url.split('?')[0]}"><b>{listing.title}</b></a>"""
-                        f"<br>{listing.price}, {listing.location}{'<br>' if desc else ''}{desc}"
+                        f"<br>{listing.price}, {listing.location}{desc_newline}{desc}"
                     )
                     if rating.comment == AIResponse.NOT_EVALUATED
                     else (
                         f"<b>[{rating.conclusion} ({rating.score})]</b>"
                         f"""<a href="{listing.post_url.split('?')[0]}"><b>{listing.title}</b></a>"""
                         f"<br>{listing.price}, {listing.location}<br>"
-                        f"{desc}{'<br>' if desc else ''}"
+                        f"{desc}{desc_newline}"
                         f"<b>AI</b>: <i>{rating.comment}</i>"
                     )
                 )
