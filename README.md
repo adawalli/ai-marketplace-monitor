@@ -303,8 +303,7 @@ pushover_api_token = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
 notify_with = 'pushover'
 ```
 
-By default, notifications include only the **title**, **price**, **location**, and **AI-generated comments** (if enabled).
-To include the **listing description**, you can add the `with_description` option to your config.
+By default, notifications include the **title**, **price**, **location**, **description**, and **AI-generated comments** (if enabled). To exclude or limit the length of the **listing description**, you can add the `with_description` option to your config.
 
 You can set `with_description` to:
 
