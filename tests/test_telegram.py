@@ -58,7 +58,7 @@ class TestTelegramNotificationConfig:
         assert config.notify_method == "telegram"
         assert config.telegram_bot_token is None
         assert config.telegram_chat_id is None
-        assert config.message_format == "markdown"  # Should default to markdown
+        assert config.message_format == "markdownv2"  # Should default to markdownv2
 
     def test_init_with_values(self: "TestTelegramNotificationConfig") -> None:
         """Test initialization with values."""
@@ -125,10 +125,10 @@ class TestTelegramNotificationConfig:
                 assert config.telegram_chat_id == chat_id.strip()
 
     def test_handle_message_format_default(self: "TestTelegramNotificationConfig") -> None:
-        """Test message_format defaults to markdown when None."""
+        """Test message_format defaults to markdownv2 when None."""
         config = TelegramNotificationConfig(name="test")
-        # message_format should already be "markdown" due to override in handle_message_format
-        assert config.message_format == "markdown"
+        # message_format should already be "markdownv2" due to override in handle_message_format
+        assert config.message_format == "markdownv2"
 
     def test_handle_message_format_explicit(self: "TestTelegramNotificationConfig") -> None:
         """Test message_format when explicitly set."""

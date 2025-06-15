@@ -39,9 +39,11 @@ class TelegramNotificationConfig(PushNotificationConfig):
         # Store original value to check if it was None before parent processing
         was_none = self.message_format is None
         super().handle_message_format()
-        # If it was originally None, override the parent's "plain_text" default with "markdown"
+        # If it was originally None, override the parent's "plain_text" default with "markdownv2"
+        # This ensures Telegram uses MarkdownV2 formatting by default for proper rendering
+        # Users can still explicitly set "markdown", "html", or "plain_text" if needed
         if was_none:
-            self.message_format = "markdown"
+            self.message_format = "markdownv2"
 
     async def _send_message_async(
         self: "TelegramNotificationConfig",
@@ -154,6 +156,32 @@ class TelegramNotificationConfig(PushNotificationConfig):
                 elif self.message_format == "markdown":
                     escaped = helpers.escape_markdown(text, version=2)
                     return f"*{escaped}*"
+                elif self.message_format == "markdownv2":
+                    # For MarkdownV2, escape special characters manually
+                    special_chars = [
+                        "_",
+                        "*",
+                        "[",
+                        "]",
+                        "(",
+                        ")",
+                        "~",
+                        "`",
+                        ">",
+                        "#",
+                        "+",
+                        "-",
+                        "=",
+                        "|",
+                        "{",
+                        "}",
+                        ".",
+                        "!",
+                    ]
+                    escaped = text
+                    for char in special_chars:
+                        escaped = escaped.replace(char, f"\\{char}")
+                    return f"*{escaped}*"
                 else:
                     return text
 
@@ -166,6 +194,32 @@ class TelegramNotificationConfig(PushNotificationConfig):
                     escaped_text = helpers.escape_markdown(text, version=2)
                     # In MarkdownV2, URLs in links don't need escaping
                     return f"[{escaped_text}]({url})"
+                elif self.message_format == "markdownv2":
+                    # For MarkdownV2, escape special characters manually
+                    special_chars = [
+                        "_",
+                        "*",
+                        "[",
+                        "]",
+                        "(",
+                        ")",
+                        "~",
+                        "`",
+                        ">",
+                        "#",
+                        "+",
+                        "-",
+                        "=",
+                        "|",
+                        "{",
+                        "}",
+                        ".",
+                        "!",
+                    ]
+                    escaped_text = text
+                    for char in special_chars:
+                        escaped_text = escaped_text.replace(char, f"\\{char}")
+                    return f"_[{escaped_text}]({url})_"
                 else:
                     return f"{text}: {url}"
 
@@ -235,6 +289,14 @@ class TelegramNotificationConfig(PushNotificationConfig):
                 logger.debug(
                     f"[TELEGRAM DEBUG] Escaped message for markdown (first 200 chars): {escaped_message[:200]!r}"
                 )
+        elif self.message_format == "markdownv2":
+            # For MarkdownV2, the message is already pre-escaped in the shared notification.py
+            # No additional escaping needed here as it would double-escape
+            escaped_message = message
+            if logger:
+                logger.debug(
+                    f"[TELEGRAM DEBUG] Using pre-escaped MarkdownV2 message (first 200 chars): {escaped_message[:200]!r}"
+                )
         elif self.message_format == "html":
             escaped_message = html.escape(message)
             if logger:
@@ -284,6 +346,8 @@ class TelegramNotificationConfig(PushNotificationConfig):
         # Set parse mode based on message format
         parse_mode = None
         if self.message_format == "markdown":
+            parse_mode = "MarkdownV2"
+        elif self.message_format == "markdownv2":
             parse_mode = "MarkdownV2"
         elif self.message_format == "html":
             parse_mode = "HTML"
