@@ -290,12 +290,11 @@ class TelegramNotificationConfig(PushNotificationConfig):
                     f"[TELEGRAM DEBUG] Escaped message for markdown (first 200 chars): {escaped_message[:200]!r}"
                 )
         elif self.message_format == "markdownv2":
-            # For MarkdownV2, the message is already pre-escaped in the shared notification.py
-            # No additional escaping needed here as it would double-escape
-            escaped_message = message
+            # Apply MarkdownV2 escaping to handle special characters
+            escaped_message = helpers.escape_markdown(message, version=2)
             if logger:
                 logger.debug(
-                    f"[TELEGRAM DEBUG] Using pre-escaped MarkdownV2 message (first 200 chars): {escaped_message[:200]!r}"
+                    f"[TELEGRAM DEBUG] Escaped message for MarkdownV2 (first 200 chars): {escaped_message[:200]!r}"
                 )
         elif self.message_format == "html":
             escaped_message = html.escape(message)
