@@ -1,9 +1,13 @@
+import asyncio
+import concurrent.futures
 import html
 from dataclasses import dataclass
 from logging import Logger
 from typing import ClassVar, List
 
-import requests
+from telegram import Bot, helpers
+from telegram.constants import MessageLimit
+from telegram.error import BadRequest, RetryAfter, TelegramError, TimedOut
 
 from .notification import PushNotificationConfig
 from .utils import hilight
@@ -39,6 +43,132 @@ class TelegramNotificationConfig(PushNotificationConfig):
         if was_none:
             self.message_format = "markdown"
 
+    async def _send_message_async(
+        self: "TelegramNotificationConfig",
+        bot: Bot,
+        text: str,
+        parse_mode: str | None,
+        logger: Logger | None = None,
+        max_retries: int = 3,
+    ) -> bool:
+        """Send a single message using async telegram bot with retry logic."""
+        for attempt in range(max_retries + 1):
+            try:
+                await bot.send_message(
+                    chat_id=self.telegram_chat_id,  # type: ignore[arg-type]
+                    text=text,
+                    parse_mode=parse_mode,
+                    disable_web_page_preview=True,
+                )
+                return True
+            except RetryAfter as e:
+                if logger:
+                    logger.warning(
+                        f"Telegram rate limit hit, waiting {e.retry_after} seconds (attempt {attempt + 1}/{max_retries + 1})"
+                    )
+                if attempt < max_retries:
+                    await asyncio.sleep(e.retry_after)
+                    continue
+                else:
+                    if logger:
+                        logger.error("Max retries exceeded for rate limiting")
+                    return False
+            except TimedOut as e:
+                if logger:
+                    logger.warning(
+                        f"Telegram request timed out (attempt {attempt + 1}/{max_retries + 1}): {e}"
+                    )
+                if attempt < max_retries:
+                    # Exponential backoff for timeouts
+                    wait_time = 2**attempt
+                    await asyncio.sleep(wait_time)
+                    continue
+                else:
+                    if logger:
+                        logger.error("Max retries exceeded for timeout")
+                    return False
+            except BadRequest as e:
+                if logger:
+                    logger.error(f"Telegram BadRequest error: {e}")
+                    logger.error(f"Error message: {e.message}")
+                    # Log specific details for common formatting issues
+                    if "can't parse" in str(e).lower():
+                        logger.error("Parse error detected - likely issue with message formatting")
+                        logger.debug(f"Message length: {len(text)}")
+                        logger.debug(f"Parse mode: {parse_mode}")
+                        logger.debug(f"Message preview (first 200 chars): {text[:200]!r}")
+                return False  # Don't retry BadRequest errors
+            except TelegramError as e:
+                if logger:
+                    logger.error(f"Telegram API error: {e}")
+                return False  # Don't retry other TelegramError cases
+
+        return False  # Should not reach here
+
+    async def _send_all_messages_async(
+        self: "TelegramNotificationConfig",
+        title: str,
+        messages: list[str],
+        parse_mode: str | None,
+        logger: Logger | None = None,
+    ) -> bool:
+        """Send all message parts using async context manager."""
+        async with Bot(token=self.telegram_bot_token) as bot:  # type: ignore[arg-type]
+            # Helper function to format text based on message_format
+            def format_bold(text: str) -> str:
+                if self.message_format == "html":
+                    return f"<b>{html.escape(text)}</b>"
+                elif self.message_format == "markdown":
+                    escaped = helpers.escape_markdown(text, version=2)
+                    return f"*{escaped}*"
+                else:
+                    return text
+
+            def format_italic_link(text: str, url: str) -> str:
+                if self.message_format == "html":
+                    escaped_text = html.escape(text)
+                    escaped_url = html.escape(url, quote=True)
+                    return f'<i><a href="{escaped_url}">{escaped_text}</a></i>'
+                elif self.message_format == "markdown":
+                    escaped_text = helpers.escape_markdown(text, version=2)
+                    # In MarkdownV2, URLs in links don't need escaping
+                    return f"[{escaped_text}]({url})"
+                else:
+                    return f"{text}: {url}"
+
+            signature = format_italic_link(
+                "Sent by AI Marketplace Monitor",
+                "https://github.com/BoPeng/ai-marketplace-monitor",
+            )
+
+            for idx, msg in enumerate(messages):
+                title_part = format_bold(title)
+                if len(messages) > 1:
+                    title_part += f" ({idx + 1}/{len(messages)})"
+
+                full_message = f"{title_part}\n\n{msg}"
+
+                # Add signature to the last message
+                if idx == len(messages) - 1:
+                    full_message += f"\n\n{signature}"
+
+                # Final safety check
+                if len(full_message) > MessageLimit.MAX_TEXT_LENGTH:
+                    if logger:
+                        logger.warning(
+                            f"Message part {idx + 1} exceeded limit after formatting. Truncating..."
+                        )
+                    # Truncate with some buffer for the ellipsis
+                    truncate_at = MessageLimit.MAX_TEXT_LENGTH - len(signature) - 50
+                    msg = msg[:truncate_at] + "..."
+                    full_message = f"{title_part}\n\n{msg}\n\n{signature}"
+
+                success = await self._send_message_async(bot, full_message, parse_mode, logger)
+                if not success:
+                    return False
+
+            return True
+
     def send_message(
         self: "TelegramNotificationConfig",
         title: str,
@@ -52,52 +182,25 @@ class TelegramNotificationConfig(PushNotificationConfig):
                 )
             return False
 
-        url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
+        # Escape the message content based on format
+        if self.message_format == "markdown":
+            escaped_message = helpers.escape_markdown(message, version=2)
+        elif self.message_format == "html":
+            escaped_message = html.escape(message)
+        else:
+            escaped_message = message
 
-        # Escape functions for safe formatting
-        def md_escape(text: str) -> str:
-            """Escape special characters for MarkdownV2"""
-            # Characters that need escaping in MarkdownV2: _ * [ ] ( ) ~ ` > # + - = | { } . ! \
-            special_chars = "_*[]()~`>#+\\-=|{}.!\\"
-            escape_map = str.maketrans({char: f"\\{char}" for char in special_chars})
-            return text.translate(escape_map)
-
-        def html_escape(text: str) -> str:
-            """Escape special characters for HTML"""
-            return html.escape(text)
-
-        # Helper function to format text based on message_format
-        def format_bold(text: str) -> str:
-            if self.message_format == "html":
-                return f"<b>{html_escape(text)}</b>"
-            elif self.message_format == "markdown":
-                return f"*{md_escape(text)}*"
-            else:
-                return text
-
-        def format_italic_link(text: str, url: str) -> str:
-            if self.message_format == "html":
-                return f'<i><a href="{html_escape(url)}">{html_escape(text)}</a></i>'
-            elif self.message_format == "markdown":
-                return f"_[{md_escape(text)}]({url})_"
-            else:
-                return f"{text}: {url}"
-
-        # Calculate maximum overhead for title and signature
-        max_title_part = f"{format_bold(title)} (999/999)\n\n"  # Worst case part numbering
-        signature = f"\n\n{format_italic_link('Sent by AI Marketplace Monitor', 'https://github.com/BoPeng/ai-marketplace-monitor')}"
-        max_overhead = len(max_title_part) + len(signature)
-
-        # Telegram's limit is 4096, leave buffer and account for overhead
-        max_content_length = 4096 - max_overhead - 50  # Extra buffer for safety
+        # Conservative estimate for overhead
+        max_overhead = 200  # Title + part numbering + signature + safety buffer
+        max_content_length = MessageLimit.MAX_TEXT_LENGTH - max_overhead
 
         # Split message if it's too long
         messages = []
-        if len(message) <= max_content_length:
-            messages.append(message)
+        if len(escaped_message) <= max_content_length:
+            messages.append(escaped_message)
         else:
             # Split by '\n\n' which separates listings
-            pieces = message.split("\n\n")
+            pieces = escaped_message.split("\n\n")
             current_msg = ""
 
             for piece in pieces:
@@ -109,11 +212,11 @@ class TelegramNotificationConfig(PushNotificationConfig):
                         messages.append(current_msg)
                         current_msg = piece
                     else:
-                        # Single piece is too long, split it further
-                        # This is a fallback for extremely long individual listings
+                        # Single piece is too long, split it at word boundaries
                         while len(piece) > max_content_length:
                             split_point = piece.rfind(" ", 0, max_content_length)
-                            if split_point == -1:
+                            if split_point == -1 or split_point == 0:
+                                # No space found or space at beginning, force split
                                 split_point = max_content_length
                             messages.append(piece[:split_point])
                             piece = piece[split_point:].lstrip()
@@ -122,65 +225,51 @@ class TelegramNotificationConfig(PushNotificationConfig):
             if current_msg:
                 messages.append(current_msg)
 
-        # Send each message part
-        for idx, msg in enumerate(messages):
-            title_part = format_bold(title)
-            if len(messages) > 1:
-                title_part += f" ({idx + 1}/{len(messages)})"
+        # Set parse mode based on message format
+        parse_mode = None
+        if self.message_format == "markdown":
+            parse_mode = "MarkdownV2"
+        elif self.message_format == "html":
+            parse_mode = "HTML"
 
-            full_message = f"{title_part}\n\n{msg}"
-
-            # Add signature to the last message
-            if idx == len(messages) - 1:
-                full_message += f"\n\n{format_italic_link('Sent by AI Marketplace Monitor', 'https://github.com/BoPeng/ai-marketplace-monitor')}"
-
-            # Final safety check - if somehow still too long, truncate
-            if len(full_message) > 4096:
-                available_space = (
-                    4096
-                    - len(title_part)
-                    - len("\n\n")
-                    - (len(signature) if idx == len(messages) - 1 else 0)
-                    - 20
-                )
-                # Ensure available_space is never negative to prevent malformed slicing
-                available_space = max(0, available_space)
-                msg = msg[:available_space] + "..."
-                full_message = f"{title_part}\n\n{msg}"
-                if idx == len(messages) - 1:
-                    full_message += f"\n\n{format_italic_link('Sent by AI Marketplace Monitor', 'https://github.com/BoPeng/ai-marketplace-monitor')}"
-
-            payload = {
-                "chat_id": self.telegram_chat_id,
-                "text": full_message,
-                "disable_web_page_preview": True,
-            }
-
-            # Set parse mode based on message format
-            if self.message_format == "markdown":
-                payload["parse_mode"] = "MarkdownV2"
-            elif self.message_format == "html":
-                payload["parse_mode"] = "HTML"
-
+        # Handle both sync and async contexts
+        try:
+            # Check if we're already in a running event loop
             try:
-                response = requests.post(url, json=payload, timeout=30)
-                response.raise_for_status()
+                asyncio.get_running_loop()
 
-                result = response.json()
-                if not result.get("ok", False):
-                    if logger:
-                        logger.error(
-                            f"Telegram API error: {result.get('description', 'Unknown error')}"
+                # We're in a running loop, use a thread to avoid RuntimeError
+                def run_in_thread():
+                    new_loop = asyncio.new_event_loop()
+                    try:
+                        return new_loop.run_until_complete(
+                            self._send_all_messages_async(title, messages, parse_mode, logger)
                         )
-                    return False
+                    finally:
+                        new_loop.close()
 
-            except requests.exceptions.RequestException as e:
-                if logger:
-                    logger.error(f"Failed to send Telegram message: {e}")
-                return False
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(run_in_thread)
+                    all_sent = future.result()
 
-        if logger:
+            except RuntimeError:
+                # No running loop, we can create our own
+                loop = asyncio.new_event_loop()
+                try:
+                    all_sent = loop.run_until_complete(
+                        self._send_all_messages_async(title, messages, parse_mode, logger)
+                    )
+                finally:
+                    loop.close()
+
+        except Exception as e:
+            if logger:
+                logger.error(f"Unexpected error sending Telegram message: {e}")
+            all_sent = False
+
+        if all_sent and logger:
             logger.info(
                 f"""{hilight("[Notify]", "succ")} Sent {self.name} a message with title {hilight(title)}"""
             )
-        return True
+
+        return all_sent
