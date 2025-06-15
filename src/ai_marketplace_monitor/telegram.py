@@ -52,14 +52,32 @@ class TelegramNotificationConfig(PushNotificationConfig):
         max_retries: int = 3,
     ) -> bool:
         """Send a single message using async telegram bot with retry logic."""
+        if logger:
+            logger.debug(
+                f"[TELEGRAM DEBUG] _send_message_async called with text length: {len(text)}"
+            )
+            logger.debug(f"[TELEGRAM DEBUG] Parse mode: {parse_mode}")
+            logger.debug(f"[TELEGRAM DEBUG] Text preview (first 100 chars): {text[:100]!r}")
+
         for attempt in range(max_retries + 1):
             try:
-                await bot.send_message(
+                if logger:
+                    logger.debug(
+                        f"[TELEGRAM DEBUG] Sending message attempt {attempt + 1}/{max_retries + 1}"
+                    )
+
+                result = await bot.send_message(
                     chat_id=self.telegram_chat_id,  # type: ignore[arg-type]
                     text=text,
                     parse_mode=parse_mode,
                     disable_web_page_preview=True,
                 )
+
+                if logger:
+                    logger.debug(
+                        f"[TELEGRAM DEBUG] Message sent successfully! Message ID: {result.message_id}"
+                    )
+                    logger.debug(f"[TELEGRAM DEBUG] Response: {result}")
                 return True
             except RetryAfter as e:
                 if logger:
@@ -89,14 +107,19 @@ class TelegramNotificationConfig(PushNotificationConfig):
                     return False
             except BadRequest as e:
                 if logger:
-                    logger.error(f"Telegram BadRequest error: {e}")
-                    logger.error(f"Error message: {e.message}")
+                    logger.error(f"[TELEGRAM DEBUG] BadRequest error: {e}")
+                    logger.error(f"[TELEGRAM DEBUG] Error message: {e.message}")
+                    logger.error(f"[TELEGRAM DEBUG] Full error dict: {e.__dict__}")
                     # Log specific details for common formatting issues
                     if "can't parse" in str(e).lower():
-                        logger.error("Parse error detected - likely issue with message formatting")
-                        logger.debug(f"Message length: {len(text)}")
-                        logger.debug(f"Parse mode: {parse_mode}")
-                        logger.debug(f"Message preview (first 200 chars): {text[:200]!r}")
+                        logger.error(
+                            "[TELEGRAM DEBUG] Parse error detected - likely issue with message formatting"
+                        )
+                        logger.debug(f"[TELEGRAM DEBUG] Full text that failed: {text!r}")
+                        logger.debug(f"[TELEGRAM DEBUG] Parse mode: {parse_mode}")
+                        # Log each line to find problematic characters
+                        for i, line in enumerate(text.split("\n")[:10]):
+                            logger.debug(f"[TELEGRAM DEBUG] Line {i}: {line!r}")
                 return False  # Don't retry BadRequest errors
             except TelegramError as e:
                 if logger:
@@ -113,6 +136,16 @@ class TelegramNotificationConfig(PushNotificationConfig):
         logger: Logger | None = None,
     ) -> bool:
         """Send all message parts using async context manager."""
+        if logger:
+            logger.debug(
+                f"[TELEGRAM DEBUG] _send_all_messages_async called with {len(messages)} messages"
+            )
+            logger.debug(
+                f"[TELEGRAM DEBUG] Using bot token: {self.telegram_bot_token[:20]}..."
+                if self.telegram_bot_token
+                else "No token"
+            )
+
         async with Bot(token=self.telegram_bot_token) as bot:  # type: ignore[arg-type]
             # Helper function to format text based on message_format
             def format_bold(text: str) -> str:
@@ -175,6 +208,19 @@ class TelegramNotificationConfig(PushNotificationConfig):
         message: str,
         logger: Logger | None = None,
     ) -> bool:
+        # DEBUG: Log entry into send_message
+        if logger:
+            logger.debug(f"[TELEGRAM DEBUG] Entering send_message with title: {title!r}")
+            logger.debug(
+                f"[TELEGRAM DEBUG] Bot token: {self.telegram_bot_token[:20]}..."
+                if self.telegram_bot_token
+                else "[TELEGRAM DEBUG] Bot token is None"
+            )
+            logger.debug(f"[TELEGRAM DEBUG] Chat ID: {self.telegram_chat_id}")
+            logger.debug(f"[TELEGRAM DEBUG] Message format: {self.message_format}")
+            logger.debug(f"[TELEGRAM DEBUG] Message length: {len(message)} chars")
+            logger.debug(f"[TELEGRAM DEBUG] Message preview: {message[:100]!r}...")
+
         if not self.telegram_bot_token or not self.telegram_chat_id:
             if logger:
                 logger.error(
@@ -185,10 +231,20 @@ class TelegramNotificationConfig(PushNotificationConfig):
         # Escape the message content based on format
         if self.message_format == "markdown":
             escaped_message = helpers.escape_markdown(message, version=2)
+            if logger:
+                logger.debug(
+                    f"[TELEGRAM DEBUG] Escaped message for markdown (first 200 chars): {escaped_message[:200]!r}"
+                )
         elif self.message_format == "html":
             escaped_message = html.escape(message)
+            if logger:
+                logger.debug(
+                    f"[TELEGRAM DEBUG] Escaped message for HTML (first 200 chars): {escaped_message[:200]!r}"
+                )
         else:
             escaped_message = message
+            if logger:
+                logger.debug("[TELEGRAM DEBUG] No escaping applied (plain text)")
 
         # Conservative estimate for overhead
         max_overhead = 200  # Title + part numbering + signature + safety buffer
@@ -232,11 +288,17 @@ class TelegramNotificationConfig(PushNotificationConfig):
         elif self.message_format == "html":
             parse_mode = "HTML"
 
+        if logger:
+            logger.debug(f"[TELEGRAM DEBUG] Parse mode set to: {parse_mode}")
+            logger.debug(f"[TELEGRAM DEBUG] Number of message parts: {len(messages)}")
+
         # Handle both sync and async contexts
         try:
             # Check if we're already in a running event loop
             try:
                 asyncio.get_running_loop()
+                if logger:
+                    logger.debug("[TELEGRAM DEBUG] Already in event loop, using thread")
 
                 # We're in a running loop, use a thread to avoid RuntimeError
                 def run_in_thread():
@@ -254,6 +316,8 @@ class TelegramNotificationConfig(PushNotificationConfig):
 
             except RuntimeError:
                 # No running loop, we can create our own
+                if logger:
+                    logger.debug("[TELEGRAM DEBUG] No event loop, creating new one")
                 loop = asyncio.new_event_loop()
                 try:
                     all_sent = loop.run_until_complete(
@@ -265,11 +329,18 @@ class TelegramNotificationConfig(PushNotificationConfig):
         except Exception as e:
             if logger:
                 logger.error(f"Unexpected error sending Telegram message: {e}")
+                logger.error(f"[TELEGRAM DEBUG] Exception type: {type(e).__name__}")
+                logger.error(f"[TELEGRAM DEBUG] Exception details: {e!r}")
+                import traceback
+
+                logger.debug(f"[TELEGRAM DEBUG] Traceback: {traceback.format_exc()}")
             all_sent = False
 
         if all_sent and logger:
             logger.info(
                 f"""{hilight("[Notify]", "succ")} Sent {self.name} a message with title {hilight(title)}"""
             )
+        elif logger:
+            logger.error(f"[TELEGRAM DEBUG] Failed to send message. all_sent={all_sent}")
 
         return all_sent
