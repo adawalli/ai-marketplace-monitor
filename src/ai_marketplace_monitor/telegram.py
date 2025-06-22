@@ -303,7 +303,7 @@ class TelegramNotificationConfig(PushNotificationConfig):
             # Handle different async contexts properly
             try:
                 # Check if we're in an existing event loop
-                asyncio.get_running_loop()  # Will raise if no loop
+                asyncio.get_running_loop()
                 # We're in an async context (like pytest-asyncio)
                 # Can't use asyncio.run(), need to handle differently
 

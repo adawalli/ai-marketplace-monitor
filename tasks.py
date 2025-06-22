@@ -153,7 +153,7 @@ def tests(c: Context) -> None:
     print("Running non-telegram tests...")
     non_telegram_result = _run(
         c,
-        f"poetry run pytest {' '.join(pytest_options)} {TEST_DIR} {SOURCE_DIR} --ignore={TEST_DIR}/test_telegram.py",
+        f"poetry run pytest {' '.join(pytest_options)} {TEST_DIR} {SOURCE_DIR} --ignore={TEST_DIR}/test_telegram_simplified.py --ignore={TEST_DIR}/test_telegram_integration.py --ignore={TEST_DIR}/test_telegram_formatting.py",
     )
 
     # Run telegram tests separately to avoid event loop conflicts with Playwright
@@ -161,7 +161,7 @@ def tests(c: Context) -> None:
     print("Running telegram tests...")
     telegram_result = _run(
         c,
-        f"poetry run pytest --cov --cov-append --cov-report= --cov-fail-under=0 {TEST_DIR}/test_telegram.py",
+        f"poetry run pytest --cov --cov-append --cov-report= --cov-fail-under=0 {TEST_DIR}/test_telegram*.py",
     )
 
     # Both test runs must succeed for overall success
