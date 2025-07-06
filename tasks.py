@@ -2,8 +2,9 @@
 
 Execute 'invoke --list' for guidance on using Invoke
 """
-
+import os
 import platform
+import tempfile
 import webbrowser
 from pathlib import Path
 from typing import Optional
@@ -103,15 +104,23 @@ def ruff(c: Context) -> None:
 @task()
 def security(c: Context) -> None:
     """Run security related checks."""
-    # _run(
-    #     c,
-    #     "poetry export --with dev --format=requirements.txt --without-hashes | "
-    #     "poetry run safety check --stdin --full-report",
-    # )
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+        temp_file = f.name
+    try:
+        _run(
+            c,
+            f"uv export --extra dev --format requirements-txt --no-hashes  > {temp_file}")
+        _run(c,
+            f"uv run pip-audit --requirement {temp_file} --format json",
+        )
+    finally:
+        # Clean up
+        if os.path.exists(temp_file):
+            os.unlink(temp_file)
     return None
 
 
-@task(pre=[ruff, security, call(format_, check=True)])
+@task(pre=[ruff, call(format_, check=True)])
 def lint(c: Context) -> None:
     """Run all linting."""
 

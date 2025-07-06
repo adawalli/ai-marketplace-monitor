@@ -91,9 +91,8 @@ jobs:
   #     - name: Install system deps
   #       shell: bash
   #       run: |
-  #         pip install nox-poetry==1.1.0
-  #         pip install poetry==1.8.5
-  #         poetry config virtualenvs.in-project true
+  #         pip install nox==1.1.0
+  #         pip install uv==1.8.5
 
   #     - name: Download coverage data
   #       uses: actions/download-artifact@v4.1.8
