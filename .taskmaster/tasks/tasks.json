@@ -1,0 +1,139 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Add python-telegram-bot dependency",
+        "description": "Install python-telegram-bot library using poetry and ensure compatibility with existing project structure",
+        "details": "Use `poetry add python-telegram-bot` to install the latest version (v20+). This library is async-only but we will wrap all async calls with `asyncio.run()` to maintain synchronous interface throughout the project. Verify installation doesn't conflict with existing dependencies in pyproject.toml.",
+        "testStrategy": "Verify successful installation by importing telegram module in a test script. Check that poetry.lock is updated correctly and no dependency conflicts exist.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Create TelegramNotificationConfig class",
+        "description": "Implement core TelegramNotificationConfig class inheriting from NotificationConfig base class",
+        "details": "Create class in appropriate module with fields: telegram_bot_token (str), telegram_chat_id (str), message_format (str with default 'markdownv2'). Use pydantic2 for validation following existing project patterns. Implement basic send_message() method signature. Follow existing notification class patterns for consistency.",
+        "testStrategy": "Unit tests for class instantiation, field validation, and basic method structure. Mock telegram.Bot class for testing. Test configuration validation for bot token and chat ID formats.",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Integrate TelegramNotificationConfig with UserConfig",
+        "description": "Add TelegramNotificationConfig to the UserConfig inheritance chain and configuration system",
+        "details": "Modify UserConfig to include TelegramNotificationConfig as an optional field. Update TOML configuration parsing to handle [notification.telegram] section. Add validation for telegram_bot_token format (bot prefix) and telegram_chat_id format. Follow existing notification integration patterns in user.py.",
+        "testStrategy": "Test TOML configuration parsing with valid and invalid telegram configurations. Unit tests for UserConfig integration. Validate configuration loading and error handling for malformed configs.",
+        "priority": "high",
+        "dependencies": [
+          2
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Implement basic message sending functionality",
+        "description": "Create core message sending logic using python-telegram-bot with synchronous wrapper",
+        "details": "Implement send_message() method using `asyncio.run(bot.send_message())` wrapper pattern. Create telegram.Bot instance with bot token. Handle basic text message sending to specified chat_id. Maintain 100% synchronous interface - no async/await keywords in our code. Use existing notification content structure from base classes.",
+        "testStrategy": "Mock telegram.Bot.send_message method. Test successful message sending with various content types. Verify asyncio.run() wrapper works correctly. Test with different chat_id formats.",
+        "priority": "high",
+        "dependencies": [
+          3
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Add message formatting support",
+        "description": "Implement MarkdownV2, HTML, and text formatting options for Telegram messages",
+        "details": "Add parse_mode parameter to send_message calls based on message_format config. Implement MarkdownV2 formatting (default), HTML formatting, and plain text fallback. Handle format-specific escaping rules for MarkdownV2. Provide graceful degradation: markdownv2 > html > text on format errors. Reuse existing notification content structure for all listing fields.",
+        "testStrategy": "Test all three formatting modes with sample marketplace listing data. Verify MarkdownV2 escaping rules. Test format fallback behavior when formatting fails. Mock telegram API responses for format errors.",
+        "priority": "medium",
+        "dependencies": [
+          4
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Implement message splitting for long content",
+        "description": "Add automatic message chunking for content exceeding Telegram's 4096 character limit",
+        "details": "Implement message splitting logic that chunks messages at word boundaries when possible. Maximum 4096 characters per chunk. Handle edge cases like single words longer than limit. Maintain formatting consistency across chunks. Send multiple messages in sequence for long content. Preserve message structure and readability.",
+        "testStrategy": "Test with messages of various lengths: under 4096, exactly 4096, over 4096, and extremely long messages. Verify word boundary splitting. Test with different formatting modes. Validate chunk ordering and delivery.",
+        "priority": "medium",
+        "dependencies": [
+          5
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Add error handling and retry logic",
+        "description": "Implement robust error handling with exponential backoff retry mechanism",
+        "details": "Catch telegram.error.NetworkError for retry logic. Implement exponential backoff: 0.1s, 0.2s, 0.4s, 0.8s, 1.6s for maximum 5 attempts. Use existing NotificationStatus enum for status tracking. Handle permanent errors (invalid token, chat not found) vs transient errors (network issues). Log retry attempts and final status.",
+        "testStrategy": "Mock network failures and verify retry behavior. Test exponential backoff timing. Verify permanent vs transient error handling. Test maximum retry limit. Validate status tracking and logging.",
+        "priority": "medium",
+        "dependencies": [
+          6
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Create comprehensive unit test suite",
+        "description": "Develop complete unit test coverage for TelegramNotificationConfig functionality",
+        "details": "Mock telegram.Bot class completely for all tests. Test TelegramNotificationConfig instantiation, configuration validation, message sending, formatting, splitting, and error handling. Use pytest fixtures for common test setup. Follow existing test patterns in the project. Test edge cases and error scenarios. Achieve high code coverage.",
+        "testStrategy": "Unit tests for all public methods and edge cases. Mock all external dependencies. Test configuration validation, message processing, retry logic, and error scenarios. Verify test coverage metrics meet project standards.",
+        "priority": "medium",
+        "dependencies": [
+          7
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Integrate with existing notification orchestration",
+        "description": "Connect TelegramNotificationConfig with the main notification pipeline in user.py",
+        "details": "Add TelegramNotificationConfig to existing notification orchestration logic in user.py. Ensure proper integration with marketplace listing alerts. Support all current listing fields (title, price, location, AI rating, etc.) and status indicators (NEW, UPDATED, DISCOUNTED). Follow existing notification patterns for consistency.",
+        "testStrategy": "Integration tests with existing notification system. Test end-to-end notification flow from marketplace listing to Telegram delivery. Verify all listing data is properly formatted and delivered. Test with multiple notification types enabled.",
+        "priority": "medium",
+        "dependencies": [
+          8
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "Add configuration documentation and validation",
+        "description": "Create documentation and examples for Telegram notification setup and configuration",
+        "details": "Update configuration documentation with Telegram setup instructions. Provide TOML configuration examples. Document bot token and chat ID acquisition process. Add configuration validation error messages. Include troubleshooting guide for common setup issues. Follow existing documentation patterns.",
+        "testStrategy": "Validate documentation examples work correctly. Test configuration error messages are helpful. Verify setup instructions are complete and accurate. Review documentation for clarity and completeness.",
+        "priority": "low",
+        "dependencies": [
+          9
+        ],
+        "status": "pending",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-07-06T21:24:04.147Z",
+      "updated": "2025-07-06T21:24:04.147Z",
+      "description": "Tasks for master context"
+    }
+  }
+}
