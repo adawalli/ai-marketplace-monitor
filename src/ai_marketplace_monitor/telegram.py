@@ -128,8 +128,8 @@ class TelegramNotificationConfig(PushNotificationConfig):
                 return True
 
             # Use asyncio.run to execute async function synchronously
-            asyncio.run(_send_telegram_message())
-            return True
+            result = asyncio.run(_send_telegram_message())
+            return result
 
         except Exception as e:
             # Log error if logger is provided
