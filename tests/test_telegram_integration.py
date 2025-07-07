@@ -1,6 +1,7 @@
 """Tests for TelegramNotificationConfig integration with UserConfig."""
 
 from typing import Callable
+from unittest.mock import Mock, patch
 
 import pytest
 from pytest import TempPathFactory
@@ -840,3 +841,177 @@ class TestTelegramTOMLIntegration:
 
         # Check that telegram notification is available
         assert "telegram" in config.notification
+
+
+class TestTelegramSendMessage:
+    """Test send_message method with TDD approach."""
+
+    def test_send_message_successful_delivery(self):
+        """Test successful message delivery using send_message method."""
+        config = TelegramNotificationConfig(
+            name="test_telegram",
+            telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+            telegram_chat_id="123456789",
+        )
+
+        # Mock the telegram.Bot to avoid actual API calls
+        with patch("telegram.Bot") as mock_bot_class:
+            mock_bot_instance = Mock()
+            mock_bot_class.return_value = mock_bot_instance
+
+            # Mock the async send_message method
+            mock_bot_instance.send_message = Mock()
+
+            # Mock asyncio.run to simulate successful execution
+            with patch("asyncio.run") as mock_asyncio_run:
+                mock_asyncio_run.return_value = True
+
+                # This should pass once send_message is implemented
+                result = config.send_message("Test Title", "Test Message")
+
+                # Verify the call was made with correct parameters
+                assert result is True
+                mock_asyncio_run.assert_called_once()
+
+    def test_send_message_invalid_bot_token(self):
+        """Test send_message with invalid bot token."""
+        config = TelegramNotificationConfig(
+            name="test_telegram",
+            telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+            telegram_chat_id="123456789",
+        )
+
+        # Mock telegram.Bot to raise an exception for invalid token
+        with patch("telegram.Bot") as mock_bot_class:
+            mock_bot_instance = Mock()
+            mock_bot_class.return_value = mock_bot_instance
+
+            # Mock the async send_message method to raise exception
+            mock_bot_instance.send_message = Mock()
+
+            # Mock asyncio.run to simulate telegram error
+            with patch("asyncio.run") as mock_asyncio_run:
+                mock_asyncio_run.side_effect = Exception("Invalid bot token")
+
+                # This should handle the error gracefully
+                result = config.send_message("Test Title", "Test Message")
+
+                # Should return False on error
+                assert result is False
+
+    def test_send_message_invalid_chat_id(self):
+        """Test send_message with invalid chat ID."""
+        config = TelegramNotificationConfig(
+            name="test_telegram",
+            telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+            telegram_chat_id="123456789",
+        )
+
+        # Mock telegram.Bot to raise an exception for invalid chat ID
+        with patch("telegram.Bot") as mock_bot_class:
+            mock_bot_instance = Mock()
+            mock_bot_class.return_value = mock_bot_instance
+
+            # Mock the async send_message method to raise exception
+            mock_bot_instance.send_message = Mock()
+
+            # Mock asyncio.run to simulate telegram error
+            with patch("asyncio.run") as mock_asyncio_run:
+                mock_asyncio_run.side_effect = Exception("Invalid chat ID")
+
+                # This should handle the error gracefully
+                result = config.send_message("Test Title", "Test Message")
+
+                # Should return False on error
+                assert result is False
+
+    def test_send_message_network_error(self):
+        """Test send_message with network errors."""
+        config = TelegramNotificationConfig(
+            name="test_telegram",
+            telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+            telegram_chat_id="123456789",
+        )
+
+        # Mock telegram.Bot to raise network error
+        with patch("telegram.Bot") as mock_bot_class:
+            mock_bot_instance = Mock()
+            mock_bot_class.return_value = mock_bot_instance
+
+            # Mock the async send_message method to raise exception
+            mock_bot_instance.send_message = Mock()
+
+            # Mock asyncio.run to simulate network error
+            with patch("asyncio.run") as mock_asyncio_run:
+                mock_asyncio_run.side_effect = Exception("Network error")
+
+                # This should handle the error gracefully
+                result = config.send_message("Test Title", "Test Message")
+
+                # Should return False on error
+                assert result is False
+
+    def test_send_message_with_different_message_formats(self):
+        """Test send_message with different message formats."""
+        test_cases = [
+            ("plain_text", "Test Title", "Test Message"),
+            ("markdown", "Test Title", "Test Message"),
+            ("markdownv2", "Test Title", "Test Message"),
+            ("html", "Test Title", "Test Message"),
+        ]
+
+        for message_format, title, message in test_cases:
+            config = TelegramNotificationConfig(
+                name="test_telegram",
+                telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+                telegram_chat_id="123456789",
+                message_format=message_format,
+            )
+
+            # Mock the telegram.Bot to avoid actual API calls
+            with patch("telegram.Bot") as mock_bot_class:
+                mock_bot_instance = Mock()
+                mock_bot_class.return_value = mock_bot_instance
+
+                # Mock the async send_message method
+                mock_bot_instance.send_message = Mock()
+
+                # Mock asyncio.run to simulate successful execution
+                with patch("asyncio.run") as mock_asyncio_run:
+                    mock_asyncio_run.return_value = True
+
+                    # This should pass once send_message is implemented
+                    result = config.send_message(title, message)
+
+                    # Verify the call was made
+                    assert result is True
+                    mock_asyncio_run.assert_called_once()
+
+    def test_send_message_maintains_synchronous_interface(self):
+        """Test that send_message maintains synchronous interface despite async implementation."""
+        config = TelegramNotificationConfig(
+            name="test_telegram",
+            telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+            telegram_chat_id="123456789",
+        )
+
+        # Mock the telegram.Bot to avoid actual API calls
+        with patch("telegram.Bot") as mock_bot_class:
+            mock_bot_instance = Mock()
+            mock_bot_class.return_value = mock_bot_instance
+
+            # Mock the async send_message method
+            mock_bot_instance.send_message = Mock()
+
+            # Mock asyncio.run to simulate successful execution
+            with patch("asyncio.run") as mock_asyncio_run:
+                mock_asyncio_run.return_value = True
+
+                # This should be a synchronous call that returns immediately
+                result = config.send_message("Test Title", "Test Message")
+
+                # Should return synchronously
+                assert result is True
+                # Result should not be a coroutine - it should be synchronous
+                assert result  # Simple boolean check
+                mock_asyncio_run.assert_called_once()
