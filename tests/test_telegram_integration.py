@@ -6,6 +6,7 @@ import pytest
 from pytest import TempPathFactory
 
 from ai_marketplace_monitor.config import Config
+from ai_marketplace_monitor.notification import NotificationConfig, PushNotificationConfig
 from ai_marketplace_monitor.telegram import TelegramNotificationConfig
 from ai_marketplace_monitor.user import UserConfig
 
@@ -385,6 +386,332 @@ class TestTelegramNotificationConfigIntegration:
 
         # Should not have required fields when token is missing
         assert not config._has_required_fields()
+
+
+class TestTelegramFieldValidationAndInheritance:
+    """Test field validation rules and inheritance behavior."""
+
+    def test_field_type_validation(self):
+        """Test that field types are validated correctly."""
+        # Test invalid max_retries type
+        with pytest.raises(ValueError, match="max_retries must be an integer"):
+            TelegramNotificationConfig(
+                name="test_telegram",
+                telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+                telegram_chat_id="123456789",
+                max_retries="invalid",
+            )
+
+        # Test invalid retry_delay type
+        with pytest.raises(ValueError, match="retry_delay must be an integer"):
+            TelegramNotificationConfig(
+                name="test_telegram",
+                telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+                telegram_chat_id="123456789",
+                retry_delay="invalid",
+            )
+
+        # Test invalid telegram_bot_token type
+        with pytest.raises(ValueError, match="telegram_bot_token must be a non-empty string"):
+            TelegramNotificationConfig(
+                name="test_telegram",
+                telegram_bot_token=123456789,
+                telegram_chat_id="123456789",
+            )
+
+        # Test invalid telegram_chat_id type
+        with pytest.raises(ValueError, match="telegram_chat_id must be a non-empty string"):
+            TelegramNotificationConfig(
+                name="test_telegram",
+                telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+                telegram_chat_id=123456789,
+            )
+
+    def test_field_range_validation(self):
+        """Test that field ranges are validated correctly."""
+        # Test valid ranges
+        config = TelegramNotificationConfig(
+            name="test_telegram",
+            telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+            telegram_chat_id="123456789",
+            max_retries=1,
+            retry_delay=1,
+        )
+        assert config.max_retries == 1
+        assert config.retry_delay == 1
+
+        # Test zero values
+        config = TelegramNotificationConfig(
+            name="test_telegram",
+            telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+            telegram_chat_id="123456789",
+            max_retries=0,
+            retry_delay=0,
+        )
+        assert config.max_retries == 0
+        assert config.retry_delay == 0
+
+        # Test large values
+        config = TelegramNotificationConfig(
+            name="test_telegram",
+            telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+            telegram_chat_id="123456789",
+            max_retries=1000,
+            retry_delay=3600,
+        )
+        assert config.max_retries == 1000
+        assert config.retry_delay == 3600
+
+    def test_field_nullability_validation(self):
+        """Test that nullable fields are handled correctly."""
+        # Test that optional fields can be None
+        config = TelegramNotificationConfig(
+            name="test_telegram",
+            telegram_bot_token=None,
+            telegram_chat_id=None,
+            message_format=None,
+        )
+        assert config.telegram_bot_token is None
+        assert config.telegram_chat_id is None
+        assert config.message_format == "markdownv2"  # Default value after processing
+
+        # Test that required fields for functionality are None initially
+        assert not config._has_required_fields()
+
+        # Test that setting non-None values works
+        config.telegram_bot_token = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk"
+        config.telegram_chat_id = "123456789"
+        config.handle_telegram_bot_token()
+        config.handle_telegram_chat_id()
+        assert config._has_required_fields()
+
+    def test_inheritance_from_push_notification_config(self):
+        """Test that TelegramNotificationConfig correctly inherits from PushNotificationConfig."""
+        config = TelegramNotificationConfig(
+            name="test_telegram",
+            telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+            telegram_chat_id="123456789",
+        )
+
+        # Check inheritance hierarchy
+        assert isinstance(config, PushNotificationConfig)
+        assert isinstance(config, NotificationConfig)
+        assert hasattr(config, "notify_method")
+        assert hasattr(config, "max_retries")
+        assert hasattr(config, "retry_delay")
+        assert hasattr(config, "message_format")
+
+        # Check that telegram-specific fields exist
+        assert hasattr(config, "telegram_bot_token")
+        assert hasattr(config, "telegram_chat_id")
+        assert hasattr(config, "required_fields")
+
+        # Check method resolution order
+        assert TelegramNotificationConfig.__mro__[0] == TelegramNotificationConfig
+        assert TelegramNotificationConfig.__mro__[1] == PushNotificationConfig
+        assert TelegramNotificationConfig.__mro__[2] == NotificationConfig
+
+    def test_method_override_behavior(self):
+        """Test that methods are properly overridden in inheritance chain."""
+        config = TelegramNotificationConfig(
+            name="test_telegram",
+            telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+            telegram_chat_id="123456789",
+        )
+
+        # Test that notify_method is overridden
+        assert config.notify_method == "telegram"
+        assert config.notify_method != "push_notification"
+
+        # Test that required_fields is overridden
+        assert config.required_fields == ["telegram_bot_token", "telegram_chat_id"]
+
+        # Test that message_format handling is overridden
+        assert config.message_format == "markdownv2"  # Telegram default
+        # This should be different from PushNotificationConfig default
+
+        # Test that send_message method exists but is not implemented
+        assert hasattr(config, "send_message")
+        with pytest.raises(NotImplementedError):
+            config.send_message("Test", "Message")
+
+    def test_field_validation_handler_inheritance(self):
+        """Test that field validation handlers work correctly through inheritance."""
+        # Test that inherited handlers work with proper types
+        config = TelegramNotificationConfig(
+            name="test_telegram",
+            telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+            telegram_chat_id="123456789",
+            max_retries=5,  # Must be int, not string
+            retry_delay=60,  # Must be int, not string
+        )
+
+        # The handlers should have been called during initialization
+        assert isinstance(config.max_retries, int)
+        assert isinstance(config.retry_delay, int)
+        assert config.max_retries == 5
+        assert config.retry_delay == 60
+
+        # Test telegram-specific handlers work with whitespace trimming
+        config_with_whitespace = TelegramNotificationConfig(
+            name="test_telegram",
+            telegram_bot_token="  123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk  ",
+            telegram_chat_id="  123456789  ",
+        )
+        assert isinstance(config_with_whitespace.telegram_bot_token, str)
+        assert isinstance(config_with_whitespace.telegram_chat_id, str)
+        assert (
+            config_with_whitespace.telegram_bot_token.strip()
+            == config_with_whitespace.telegram_bot_token
+        )
+        assert (
+            config_with_whitespace.telegram_chat_id.strip()
+            == config_with_whitespace.telegram_chat_id
+        )
+
+    def test_polymorphic_behavior_with_notification_config(self):
+        """Test polymorphic behavior when using NotificationConfig interface."""
+        # Create telegram config
+        telegram_config = TelegramNotificationConfig(
+            name="test_telegram",
+            telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+            telegram_chat_id="123456789",
+        )
+
+        # Test that it can be used as NotificationConfig
+        def test_notification_interface(config: NotificationConfig) -> str:
+            return config.notify_method
+
+        # Should work polymorphically
+        assert test_notification_interface(telegram_config) == "telegram"
+
+        # Test that common interface methods work
+        assert hasattr(telegram_config, "_has_required_fields")
+        assert hasattr(telegram_config, "send_message_with_retry")
+        assert telegram_config._has_required_fields()
+
+        # Test that base class methods are available
+        assert hasattr(telegram_config, "max_retries")
+        assert hasattr(telegram_config, "retry_delay")
+
+    def test_user_config_inheritance_with_telegram(self):
+        """Test that UserConfig correctly inherits telegram functionality."""
+        user_config = UserConfig(
+            name="test_user",
+            telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+            telegram_chat_id="123456789",
+            max_retries=1,
+            retry_delay=1,
+        )
+
+        # Test that UserConfig inherits from TelegramNotificationConfig
+        assert isinstance(user_config, TelegramNotificationConfig)
+        assert isinstance(user_config, PushNotificationConfig)
+        assert isinstance(user_config, NotificationConfig)
+
+        # Test that telegram methods are available
+        assert hasattr(user_config, "handle_telegram_bot_token")
+        assert hasattr(user_config, "handle_telegram_chat_id")
+        assert hasattr(user_config, "handle_message_format")
+
+        # Test that telegram validation works through UserConfig
+        assert user_config._has_required_fields()
+        assert user_config.telegram_bot_token is not None
+        assert user_config.telegram_chat_id is not None
+
+    def test_multiple_inheritance_method_resolution(self):
+        """Test that multiple inheritance in UserConfig resolves methods correctly."""
+        user_config = UserConfig(
+            name="test_user",
+            telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+            telegram_chat_id="123456789",
+            message_format="markdownv2",
+            max_retries=1,
+            retry_delay=1,
+        )
+
+        # Test that telegram message format takes precedence over push notification
+        assert user_config.message_format == "markdownv2"
+
+        # Test that required fields include telegram fields
+        # Note: UserConfig may have multiple required_fields from different classes
+        # but should include telegram fields
+        assert "telegram_bot_token" in TelegramNotificationConfig.required_fields
+        assert "telegram_chat_id" in TelegramNotificationConfig.required_fields
+
+        # Test that MRO includes TelegramNotificationConfig first
+        mro = UserConfig.__mro__
+        telegram_index = None
+        push_index = None
+        for i, cls in enumerate(mro):
+            if cls == TelegramNotificationConfig:
+                telegram_index = i
+            elif cls == PushNotificationConfig:
+                push_index = i
+
+        assert telegram_index is not None
+        assert push_index is not None
+        assert telegram_index < push_index  # Telegram should come before Push in MRO
+
+    def test_field_validation_error_messages(self):
+        """Test that field validation provides clear error messages."""
+        # Test telegram_bot_token validation messages
+        with pytest.raises(ValueError, match="telegram_bot_token must be a non-empty string"):
+            TelegramNotificationConfig(
+                name="test_telegram",
+                telegram_bot_token="",
+                telegram_chat_id="123456789",
+            )
+
+        with pytest.raises(ValueError, match="Invalid telegram bot token format"):
+            TelegramNotificationConfig(
+                name="test_telegram",
+                telegram_bot_token="invalid_format",
+                telegram_chat_id="123456789",
+            )
+
+        # Test telegram_chat_id validation messages
+        with pytest.raises(ValueError, match="telegram_chat_id must be a non-empty string"):
+            TelegramNotificationConfig(
+                name="test_telegram",
+                telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+                telegram_chat_id="",
+            )
+
+        with pytest.raises(ValueError, match="Invalid telegram chat ID format"):
+            TelegramNotificationConfig(
+                name="test_telegram",
+                telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+                telegram_chat_id="invalid_format",
+            )
+
+        # Test message_format validation messages
+        with pytest.raises(ValueError, match="Invalid message format"):
+            TelegramNotificationConfig(
+                name="test_telegram",
+                telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
+                telegram_chat_id="123456789",
+                message_format="invalid_format",
+            )
+
+    def test_class_variable_inheritance(self):
+        """Test that class variables are properly inherited and overridden."""
+        # Test that notify_method is properly set
+        assert TelegramNotificationConfig.notify_method == "telegram"
+        assert hasattr(TelegramNotificationConfig, "required_fields")
+        assert TelegramNotificationConfig.required_fields == [
+            "telegram_bot_token",
+            "telegram_chat_id",
+        ]
+
+        # Test that instance has access to class variables
+        config = TelegramNotificationConfig(name="test_telegram")
+        assert config.notify_method == "telegram"
+        assert config.required_fields == ["telegram_bot_token", "telegram_chat_id"]
+
+        # Test that class variables are different from parent class
+        assert TelegramNotificationConfig.notify_method != PushNotificationConfig.notify_method
+        assert TelegramNotificationConfig.required_fields != PushNotificationConfig.required_fields
 
 
 class TestTelegramTOMLIntegration:
