@@ -263,10 +263,20 @@ task-master models --set-fallback gpt-4o-mini
 1. `task-master show <subtask-id>` - Understand requirements
 2. Explore codebase and plan implementation
 3. `task-master update-subtask --id=<id> --prompt="detailed plan"` - Log plan
-4. `task-master set-status --id=<id> --status=in-progress` - Start work
+4. **CRITICAL: `task-master set-status --id=<id> --status=in-progress` - ALWAYS mark task as in-progress when you begin work**
 5. Implement code following logged plan
 6. `task-master update-subtask --id=<id> --prompt="what worked/didn't work"` - Log progress
 7. `task-master set-status --id=<id> --status=done` - Complete task
+
+**REMINDER: Always mark tasks as in-progress when you start working on them. This provides clear visibility into what's being worked on and prevents confusion.**
+
+### Python Development
+
+**CRITICAL: Always run Python commands through Poetry for this project:**
+- Use `poetry run python` instead of `python`
+- Use `poetry run pytest` instead of `pytest`
+- Use `poetry run ruff` instead of `ruff`
+- This ensures you're using the correct virtual environment and dependencies
 
 ### Complex Workflows with Checklists
 

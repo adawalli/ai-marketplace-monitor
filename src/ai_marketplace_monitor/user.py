@@ -14,11 +14,13 @@ from .notification import NotificationConfig, NotificationStatus
 from .ntfy import NtfyNotificationConfig
 from .pushbullet import PushbulletNotificationConfig
 from .pushover import PushoverNotificationConfig
+from .telegram import TelegramNotificationConfig
 from .utils import CacheType, CounterItem, cache, convert_to_seconds, counter, hilight
 
 
 @dataclass
 class UserConfig(
+    TelegramNotificationConfig,
     EmailNotificationConfig,
     PushbulletNotificationConfig,
     PushoverNotificationConfig,

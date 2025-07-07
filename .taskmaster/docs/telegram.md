@@ -25,7 +25,7 @@ This PRD outlines the implementation of Telegram notifications for the AI Market
 ## System Components
 
 ### TelegramNotificationConfig Class
-- Inherits from `NotificationConfig` base class
+- Inherits from `NotificationConfig` base class (dataclass-based)
 - Fields:
   - `telegram_bot_token: str` - Bot authentication token
   - `telegram_chat_id: str` - Target chat/channel ID
@@ -79,7 +79,7 @@ message_format = "markdownv2"  # options: markdownv2, html, text
 
 ### Dependencies
 - Add `python-telegram-bot` using `poetry add python-telegram-bot`
-- Use existing pydantic2 for any custom types or data validation
+- Use existing dataclass patterns for configuration (no Pydantic)
 - No additional infrastructure requirements (leverages existing config system)
 
 ### Testing Infrastructure
@@ -89,23 +89,39 @@ message_format = "markdownv2"  # options: markdownv2, html, text
 
 # Development Roadmap
 
-## MVP Phase
-1. **Core Implementation**
-   - Create TelegramNotificationConfig class
-   - Implement basic send_message() functionality
-   - Add configuration validation
-   - Integrate with existing UserConfig system
+## CRITICAL: Test-Driven Development (TDD) Process
+**IMPORTANT**: Before writing ANY implementation code, the TDD red/green/refactor cycle MUST be followed:
+1. **RED**: Write failing tests that describe the desired behavior
+2. **GREEN**: Write minimal code to make tests pass
+3. **REFACTOR**: Improve code quality while keeping tests green
 
-2. **Message Handling**
-   - Implement message splitting for long content
-   - Support all three format types (markdownv2, html, text)
-   - Error handling with standard retry logic
+No production code should be written without a failing test driving it first.
+
+## MVP Phase
+1. **Core Implementation (TDD Required)**
+   - Write failing tests for TelegramNotificationConfig class behavior
+   - Create TelegramNotificationConfig class to make tests pass
+   - Write failing tests for send_message() functionality
+   - Implement basic send_message() to satisfy tests
+   - Write failing tests for configuration validation
+   - Add configuration validation to pass tests
+   - Write failing tests for UserConfig integration
+   - Integrate with existing UserConfig system to pass tests
+
+2. **Message Handling (TDD Required)**
+   - Write failing tests for message splitting logic
+   - Implement message splitting for long content to pass tests
+   - Write failing tests for each format type (markdownv2, html, text)
+   - Support all three format types to satisfy tests
+   - Write failing tests for retry behavior
+   - Implement error handling with standard retry logic to pass tests
 
 3. **Testing Foundation**
-   - Unit tests for TelegramNotificationConfig
+   - All implementation driven by tests written first
    - Mock-based testing for all Telegram API interactions
    - Test coverage for message splitting edge cases
    - Retry logic validation tests
+   - Verify all tests pass before considering any feature complete
 
 ## Future Enhancements (Post-MVP)
 - Interactive buttons (callback handlers)
@@ -166,9 +182,10 @@ message_format = "markdownv2"  # options: markdownv2, html, text
 - **Configuration Validation**: Validate bot token format and chat ID format during config load
 
 ## Implementation Notes
-- Follow red/green TDD approach for all new code
+- **MANDATORY**: Follow red/green/refactor TDD approach - write failing tests BEFORE any implementation code
+- **TEST FIRST**: No production code without a failing test driving it
 - Use latest python-telegram-bot but maintain 100% synchronous codebase with asyncio.run() wrapper
-- Use pydantic2 for any custom types, data models, or validation (consistent with project patterns)
+- Use dataclasses for configuration and data models (consistent with project patterns)
 - Mock telegram.Bot class completely for unit tests (no async test complexity)
 - Use existing notification base class patterns for consistency
 - Integrate with existing error logging and monitoring systems
