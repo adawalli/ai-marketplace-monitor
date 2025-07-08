@@ -14,7 +14,8 @@ task-master models --setup                        # Configure AI models interact
 task-master list                                   # Show all tasks with status
 task-master next                                   # Get next available task to work on
 task-master show <id>                             # View detailed task information (e.g., task-master show 1.2)
-task-master set-status --id=<id> --status=done    # Mark task complete
+task-master set-status --id=<id> --status=in-progress  # Mark task/subtask as in-progress before starting work
+task-master set-status --id=<id> --status=done    # Mark task/subtask complete
 
 # Task Management
 task-master add-task --prompt="description" --research        # Add new task with AI assistance
@@ -133,11 +134,15 @@ If tasks already exist, another PRD can be parsed (with new information only!) u
 task-master next                           # Find next available task
 task-master show <id>                     # Review task details
 
+# CRITICAL: Mark as in-progress before starting work
+task-master set-status --id=<id> --status=in-progress
+
 # During implementation, check in code context into the tasks and subtasks
 task-master update-subtask --id=<id> --prompt="implementation notes..."
 
-# Complete tasks
-task-master set-status --id=<id> --status=done
+# Complete subtasks and parent tasks
+task-master set-status --id=<subtask-id> --status=done        # Mark subtask complete
+task-master set-status --id=<parent-id> --status=done        # Mark parent task complete when ALL subtasks done
 ```
 
 #### 3. Multi-Claude Workflows
@@ -263,12 +268,17 @@ task-master models --set-fallback gpt-4o-mini
 1. `task-master show <subtask-id>` - Understand requirements
 2. Explore codebase and plan implementation
 3. `task-master update-subtask --id=<id> --prompt="detailed plan"` - Log plan
-4. **CRITICAL: `task-master set-status --id=<id> --status=in-progress` - ALWAYS mark task as in-progress when you begin work**
+4. **CRITICAL: `task-master set-status --id=<id> --status=in-progress` - ALWAYS mark task/subtask as in-progress when you begin work**
 5. Implement code following logged plan
 6. `task-master update-subtask --id=<id> --prompt="what worked/didn't work"` - Log progress
-7. `task-master set-status --id=<id> --status=done` - Complete task
+7. `task-master set-status --id=<id> --status=done` - Complete subtask
+8. **IMPORTANT: When ALL subtasks are completed, mark the parent task as done: `task-master set-status --id=<parent-id> --status=done`**
 
-**REMINDER: Always mark tasks as in-progress when you start working on them. This provides clear visibility into what's being worked on and prevents confusion.**
+**CRITICAL REMINDERS:**
+- **ALWAYS mark tasks/subtasks as in-progress when you start working on them**
+- **ALWAYS mark subtasks as done when completed**
+- **ALWAYS mark parent tasks as done when ALL their subtasks are completed**
+- This provides clear visibility into what's being worked on and prevents confusion
 
 ### Python Development
 
@@ -299,6 +309,15 @@ gh pr create --title "Complete task 1.2: User authentication" --body "Implements
 # Reference task in commits
 git commit -m "feat: implement JWT auth (task 1.2)"
 ```
+
+**CRITICAL GIT SECURITY REQUIREMENT:**
+
+**UNDER NO CIRCUMSTANCES SHOULD `git commit --no-verify` EVER BE RUN**
+
+- This bypasses pre-commit hooks that enforce code quality and security checks
+- Always allow hooks to run to maintain code standards and prevent issues
+- If hooks fail, fix the underlying issues rather than bypassing them
+- This is a non-negotiable security and quality requirement
 
 ### Parallel Development with Git Worktrees
 

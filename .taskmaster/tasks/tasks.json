@@ -111,7 +111,7 @@
         "id": 3,
         "title": "Integrate TelegramNotificationConfig with UserConfig System",
         "description": "Add Telegram configuration to existing UserConfig inheritance chain and TOML configuration parsing with CRITICAL requirement: maintain 100% synchronous interface using asyncio.run() wrapper to neutralize async operations",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           2
         ],
@@ -157,8 +157,8 @@
             "dependencies": [
               3
             ],
-            "details": "Develop integration points between the configuration management and notification orchestration systems. Test the end-to-end flow from configuration parsing, inheritance, validation, to triggering notifications based on configuration changes or events.",
-            "status": "pending",
+            "details": "Develop integration points between the configuration management and notification orchestration systems. Test the end-to-end flow from configuration parsing, inheritance, validation, to triggering notifications based on configuration changes or events.\n<info added on 2025-07-08T01:30:32.586Z>\nCritical bug discovered in PushNotificationConfig.notify() method: missing handling for \"markdownv2\" format leads to UnboundLocalError when msg variable is never assigned. Three potential solutions identified: 1) Add markdownv2 case to parent notify() method, 2) Have TelegramNotificationConfig normalize markdownv2 to markdown before calling parent, or 3) Override notify() in TelegramNotificationConfig to handle Telegram-specific formats. The telegram.py send_message() function already correctly maps markdownv2 to Telegram's MarkdownV2 parse_mode, so the issue is in the inheritance chain between notification configs.\n</info added on 2025-07-08T01:30:32.586Z>\n<info added on 2025-07-08T01:42:37.025Z>\nSuccessfully completed integration of Telegram configuration with notification orchestration system on 2025-07-08. Resolved critical bug in PushNotificationConfig.notify() method where missing markdownv2 format handling caused UnboundLocalError. Added markdownv2 support in notification.py at lines 132 and 192. Verified backward compatibility with all existing notification services - Pushover forces HTML format, Pushbullet forces plain_text, Ntfy treats markdownv2 as plain_text, and Email remains unaffected. End-to-end integration flow now working: TOML config parsing \u2192 UserConfig inheritance \u2192 validation \u2192 NotificationConfig.notify_all() \u2192 Telegram delivery via asyncio.run() wrapper. All 127 tests passing, code passes linting and type checking. Integration is production-ready.\n</info added on 2025-07-08T01:42:37.025Z>",
+            "status": "done",
             "testStrategy": ""
           }
         ]
@@ -167,14 +167,75 @@
         "id": 4,
         "title": "Implement Message Formatting Support (MarkdownV2, HTML, Text)",
         "description": "Add support for multiple Telegram message formats with test-driven development while maintaining 100% synchronous interface",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           3
         ],
         "priority": "medium",
         "details": "Following TDD: 1) Write failing tests for each format type (markdownv2, html, text) including proper escaping and formatting. 2) Implement format-specific message preparation in send_message() method using SYNCHRONOUS interface only. 3) Use telegram.Bot.send_message() with parse_mode parameter ('MarkdownV2', 'HTML', or None) wrapped in asyncio.run() to maintain synchronous interface. 4) Handle MarkdownV2 special character escaping (_, *, [, ], (, ), ~, `, >, #, +, -, =, |, {, }, ., !). 5) Provide graceful degradation from markdownv2 to html to text on format errors. 6) Leverage existing notification content from base classes for consistent formatting. CRITICAL: All message formatting code must use asyncio.run() wrapper to neutralize async operations and avoid conflicts with puppeteer async tests. NO async/await keywords allowed in formatting implementation.",
         "testStrategy": "Write failing tests for each format type, special character escaping, format fallback behavior, and invalid format handling. Mock telegram.Bot.send_message() and verify parse_mode parameter is set correctly. Ensure all tests remain synchronous and compatible with existing puppeteer async test suite.",
-        "subtasks": []
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Develop Test Suite for MarkdownV2",
+            "description": "Create comprehensive test cases to validate MarkdownV2 message formatting, including special character escaping and syntax correctness.",
+            "dependencies": [],
+            "details": "Design tests covering all MarkdownV2 features such as bold, italic, inline code, links, and especially the escaping of special characters as required by Telegram Bot API MarkdownV2 specification.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Develop Test Suite for HTML",
+            "description": "Create test cases to verify correct HTML message formatting and rendering, ensuring proper tag usage and escaping.",
+            "dependencies": [],
+            "details": "Include tests for common HTML elements used in messages, such as <b>, <i>, <code>, <a>, and ensure that HTML entities and special characters are correctly handled.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Develop Test Suite for Plain Text",
+            "description": "Create test cases to ensure plain text messages are handled correctly without formatting or escaping issues.",
+            "dependencies": [],
+            "details": "Verify that plain text messages are sent as-is, with no unintended formatting or character escaping, and that fallback logic works when formatting is not supported.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Implement Format-Specific Message Preparation",
+            "description": "Develop the logic to prepare messages according to the selected format (MarkdownV2, HTML, or plain text).",
+            "dependencies": [
+              1,
+              2,
+              3
+            ],
+            "details": "Implement functions or modules that take raw message content and output correctly formatted strings for each supported format, applying syntax rules and escaping as needed.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Handle Special Character Escaping and Fallback Logic",
+            "description": "Implement robust escaping of special characters for each format and fallback mechanisms when formatting fails or is unsupported.",
+            "dependencies": [
+              4
+            ],
+            "details": "Ensure that special characters are escaped according to the rules of MarkdownV2 and HTML to prevent formatting errors. Implement fallback to plain text or alternative formatting if the primary format is not supported or causes errors.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Run full test suite validation",
+            "description": "Execute 'poetry run invoke tests' to ensure no regression in the entire test suite",
+            "details": "Run the complete test suite using the invoke command to validate that all existing functionality remains intact after the Telegram integration changes",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 4
+          }
+        ]
       },
       {
         "id": 5,
@@ -185,9 +246,79 @@
           4
         ],
         "priority": "medium",
-        "details": "Following TDD: 1) Write failing tests for message splitting logic including edge cases, word boundary splitting, and format preservation across chunks. 2) Implement message splitting function that chunks at word boundaries when possible, max 4096 characters per chunk. 3) Preserve formatting across chunks for MarkdownV2 and HTML. 4) Handle edge cases like single words longer than 4096 characters. 5) Send multiple messages sequentially using asyncio.run() wrapper for each chunk to maintain 100% synchronous interface. 6) Maintain message order and add chunk indicators (1/3, 2/3, 3/3) if helpful. CRITICAL: Use asyncio.run() wrapper to neutralize ALL async operations - this is essential to avoid conflicts with puppeteer async tests. The entire message splitting implementation must present a synchronous interface with NO async/await keywords anywhere in the code.",
-        "testStrategy": "Write failing tests for various message lengths, word boundary splitting, format preservation, single long words, and chunk ordering. Mock telegram.Bot.send_message() and verify multiple calls for long messages. Tests must verify 100% synchronous interface using asyncio.run() wrapper and confirm NO async/await keywords exist in implementation code. Test compatibility with puppeteer async test environment.",
-        "subtasks": []
+        "details": "Following TDD: 1) Write failing tests for message splitting logic including edge cases, word boundary splitting, and format preservation across chunks. 2) Implement message splitting function that chunks at word boundaries when possible, max 4096 characters per chunk. 3) Preserve formatting across chunks for MarkdownV2 and HTML. 4) Handle edge cases like single words longer than 4096 characters. 5) Send multiple messages sequentially using asyncio.run() wrapper for each chunk to maintain 100% synchronous interface. 6) Maintain message order and add chunk indicators (1/3, 2/3, 3/3) if helpful. CRITICAL: Use asyncio.run() wrapper to neutralize ALL async operations - this is essential to avoid conflicts with puppeteer async tests. The entire message splitting implementation must present a synchronous interface with NO async/await keywords anywhere in the code. 7) FINAL VALIDATION: Run 'poetry run invoke tests' to ensure no regression in the entire test suite before marking complete.",
+        "testStrategy": "Write failing tests for various message lengths, word boundary splitting, format preservation, single long words, and chunk ordering. Mock telegram.Bot.send_message() and verify multiple calls for long messages. Tests must verify 100% synchronous interface using asyncio.run() wrapper and confirm NO async/await keywords exist in implementation code. Test compatibility with puppeteer async test environment. Run 'poetry run invoke tests' as final validation step.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Test suite for message splitting logic",
+            "description": "Design and implement a comprehensive test suite to verify the correctness of the message splitting logic, ensuring it handles various input lengths and content types.",
+            "dependencies": [],
+            "details": "Include tests for splitting messages into chunks of specified maximum length, handling empty messages, and ensuring no data loss.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Test suite for word boundary splitting",
+            "description": "Develop a test suite to validate that message splitting respects word boundaries, preventing words from being split across chunks.",
+            "dependencies": [
+              1
+            ],
+            "details": "Test with messages containing words of varying lengths, punctuation, and spaces. Ensure splitting only occurs at word boundaries.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Test suite for format preservation",
+            "description": "Create a test suite to ensure that message formatting (e.g., line breaks, indentation, special characters) is preserved after splitting.",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Test with messages containing formatting elements and verify that these are retained in each chunk.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Test suite for edge cases (single long words)",
+            "description": "Implement a test suite to handle edge cases such as single long words that exceed the maximum chunk size.",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Test with messages containing words longer than the maximum chunk size and verify appropriate handling (e.g., splitting with hyphenation or error handling).",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Implementation of splitting function",
+            "description": "Implement the core message splitting function that integrates all tested logic (message splitting, word boundary, format preservation, edge cases).",
+            "dependencies": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "details": "Ensure the function is robust, handles all test cases, and is efficient for production use.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Sequential message sending and chunk indicators",
+            "description": "Implement logic for sending split messages sequentially and include chunk indicators (e.g., 'Part 1/3') in each message.",
+            "dependencies": [
+              5
+            ],
+            "details": "Ensure each chunk is sent in order and clearly indicates its position within the sequence.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 6,
@@ -198,8 +329,8 @@
           5
         ],
         "priority": "medium",
-        "details": "Following TDD: 1) Write failing tests for retry behavior, network error handling, and exponential backoff timing. 2) Implement retry wrapper with exponential backoff (0.1s, 0.2s, 0.4s, 0.8s, 1.6s) for max 5 attempts using asyncio.run() wrapper. 3) Catch telegram.error.NetworkError, telegram.error.RetryAfter, and other transient errors. 4) Use time.sleep() for backoff delays. 5) Log retry attempts using existing logging infrastructure. 6) Return appropriate NotificationStatus enum values. 7) Handle rate limiting with telegram.error.RetryAfter exception. CRITICAL: Maintain 100% synchronous interface using asyncio.run() wrapper to neutralize all async operations - NO async/await keywords allowed.",
-        "testStrategy": "Write failing tests for retry behavior, exponential backoff timing, different error types, max retry limits, and logging. Mock telegram.Bot.send_message() to simulate various error conditions and verify retry logic. Tests must verify synchronous interface without async/await conflicts.",
+        "details": "Following TDD: 1) Write failing tests for retry behavior, network error handling, and exponential backoff timing. 2) Implement retry wrapper with exponential backoff (0.1s, 0.2s, 0.4s, 0.8s, 1.6s) for max 5 attempts using asyncio.run() wrapper. 3) Catch telegram.error.NetworkError, telegram.error.RetryAfter, and other transient errors. 4) Use time.sleep() for backoff delays. 5) Log retry attempts using existing logging infrastructure. 6) Return appropriate NotificationStatus enum values. 7) Handle rate limiting with telegram.error.RetryAfter exception. CRITICAL: Maintain 100% synchronous interface using asyncio.run() wrapper to neutralize all async operations - NO async/await keywords allowed. 8) FINAL VALIDATION: Run 'poetry run invoke tests' to ensure no regression in the entire test suite before marking complete.",
+        "testStrategy": "Write failing tests for retry behavior, exponential backoff timing, different error types, max retry limits, and logging. Mock telegram.Bot.send_message() to simulate various error conditions and verify retry logic. Tests must verify synchronous interface without async/await conflicts. Run 'poetry run invoke tests' as final validation step.",
         "subtasks": []
       },
       {
@@ -211,8 +342,8 @@
           6
         ],
         "priority": "medium",
-        "details": "Following TDD principles established in previous tasks: 1) Add comprehensive test cases for all edge scenarios including invalid configurations, malformed messages, network failures, and rate limiting. 2) Test integration with existing notification system end-to-end. 3) Mock all external dependencies including telegram.Bot, file system operations, and network calls. 4) Use pytest fixtures for common test setup. 5) Achieve >90% code coverage. 6) Test message splitting with various content types and lengths. 7) Validate retry logic with different failure scenarios. CRITICAL: All tests must verify synchronous interface using asyncio.run() wrapper - avoid async test conflicts with puppeteer tests.",
-        "testStrategy": "Comprehensive unit test suite covering all functionality, edge cases, error conditions, and integration points. Mock all external dependencies. Use pytest with coverage reporting. Verify all tests pass consistently with synchronous interface that won't conflict with existing async puppeteer tests.",
+        "details": "Following TDD principles established in previous tasks: 1) Add comprehensive test cases for all edge scenarios including invalid configurations, malformed messages, network failures, and rate limiting. 2) Test integration with existing notification system end-to-end. 3) Mock all external dependencies including telegram.Bot, file system operations, and network calls. 4) Use pytest fixtures for common test setup. 5) Achieve >90% code coverage. 6) Test message splitting with various content types and lengths. 7) Validate retry logic with different failure scenarios. CRITICAL: All tests must verify synchronous interface using asyncio.run() wrapper - avoid async test conflicts with puppeteer tests. 8) FINAL VALIDATION: Run 'poetry run invoke tests' to ensure no regression in the entire test suite before marking complete.",
+        "testStrategy": "Comprehensive unit test suite covering all functionality, edge cases, error conditions, and integration points. Mock all external dependencies. Use pytest with coverage reporting. Verify all tests pass consistently with synchronous interface that won't conflict with existing async puppeteer tests. Run 'poetry run invoke tests' as final validation step.",
         "subtasks": []
       },
       {
@@ -224,8 +355,8 @@
           7
         ],
         "priority": "medium",
-        "details": "Following TDD: 1) Write failing tests for configuration validation including invalid bot tokens, malformed chat IDs, and missing required fields. 2) Implement validation for telegram_bot_token format (should start with number:). 3) Validate telegram_chat_id format (numeric or @channel_name). 4) Add clear error messages for configuration issues. 5) Implement validation during UserConfig initialization. 6) Use existing validation patterns from other notification types. 7) Handle missing optional fields gracefully (use defaults). CRITICAL: Maintain synchronous interface throughout validation process using asyncio.run() wrapper where needed - NO async/await keywords allowed.",
-        "testStrategy": "Write failing tests for various invalid configurations, validation error messages, and graceful handling of missing optional fields. Verify validation occurs at appropriate initialization points. Tests must maintain synchronous interface compatibility.",
+        "details": "Following TDD: 1) Write failing tests for configuration validation including invalid bot tokens, malformed chat IDs, and missing required fields. 2) Implement validation for telegram_bot_token format (should start with number:). 3) Validate telegram_chat_id format (numeric or @channel_name). 4) Add clear error messages for configuration issues. 5) Implement validation during UserConfig initialization. 6) Use existing validation patterns from other notification types. 7) Handle missing optional fields gracefully (use defaults). CRITICAL: Maintain synchronous interface throughout validation process using asyncio.run() wrapper where needed - NO async/await keywords allowed. 8) FINAL VALIDATION: Run 'poetry run invoke tests' to ensure no regression in the entire test suite before marking complete.",
+        "testStrategy": "Write failing tests for various invalid configurations, validation error messages, and graceful handling of missing optional fields. Verify validation occurs at appropriate initialization points. Tests must maintain synchronous interface compatibility. Run 'poetry run invoke tests' as final validation step.",
         "subtasks": []
       },
       {
@@ -237,8 +368,8 @@
           8
         ],
         "priority": "medium",
-        "details": "Following TDD: 1) Write failing tests for notification pipeline integration including message routing, status tracking, and error propagation. 2) Ensure TelegramNotificationConfig works seamlessly with existing notification orchestration in user.py using synchronous interface. 3) Test integration with NotificationStatus enum and error handling patterns. 4) Verify compatibility with existing notification content generation. 5) Ensure proper logging and monitoring integration. 6) Test notification delivery alongside other notification types (email, Pushover, etc.). CRITICAL: Integration must maintain 100% synchronous interface using asyncio.run() wrapper to avoid conflicts with puppeteer async tests.",
-        "testStrategy": "Write failing tests for end-to-end notification pipeline integration, status tracking, and multi-notification-type scenarios. Mock all external services and verify proper integration behavior. Tests must verify synchronous interface compatibility with existing test suite.",
+        "details": "Following TDD: 1) Write failing tests for notification pipeline integration including message routing, status tracking, and error propagation. 2) Ensure TelegramNotificationConfig works seamlessly with existing notification orchestration in user.py using synchronous interface. 3) Test integration with NotificationStatus enum and error handling patterns. 4) Verify compatibility with existing notification content generation. 5) Ensure proper logging and monitoring integration. 6) Test notification delivery alongside other notification types (email, Pushover, etc.). CRITICAL: Integration must maintain 100% synchronous interface using asyncio.run() wrapper to avoid conflicts with puppeteer async tests. 7) FINAL VALIDATION: Run 'poetry run invoke tests' to ensure no regression in the entire test suite before marking complete.",
+        "testStrategy": "Write failing tests for end-to-end notification pipeline integration, status tracking, and multi-notification-type scenarios. Mock all external services and verify proper integration behavior. Tests must verify synchronous interface compatibility with existing test suite. Run 'poetry run invoke tests' as final validation step.",
         "subtasks": []
       },
       {
@@ -250,14 +381,14 @@
           9
         ],
         "priority": "low",
-        "details": "1) Create comprehensive documentation for Telegram notification setup including bot creation, chat ID discovery, and configuration examples. 2) Add TOML configuration examples to existing documentation. 3) Create troubleshooting guide for common issues (invalid tokens, chat permissions, rate limiting). 4) Update main project documentation to include Telegram as supported notification type. 5) Document the synchronous interface approach using asyncio.run() wrapper. 6) Perform final end-to-end testing with real Telegram bot (optional, for manual verification). 7) Ensure all tests pass and code coverage meets project standards. CRITICAL: Documentation must emphasize synchronous interface requirement and asyncio.run() wrapper usage.",
-        "testStrategy": "Document all functionality with clear examples emphasizing synchronous interface. Verify documentation accuracy through manual testing. Ensure all automated tests pass consistently and maintain high code coverage without async/await conflicts.",
+        "details": "1) Create comprehensive documentation for Telegram notification setup including bot creation, chat ID discovery, and configuration examples. 2) Add TOML configuration examples to existing documentation. 3) Create troubleshooting guide for common issues (invalid tokens, chat permissions, rate limiting). 4) Update main project documentation to include Telegram as supported notification type. 5) Document the synchronous interface approach using asyncio.run() wrapper. 6) Perform final end-to-end testing with real Telegram bot (optional, for manual verification). 7) Ensure all tests pass and code coverage meets project standards. CRITICAL: Documentation must emphasize synchronous interface requirement and asyncio.run() wrapper usage. 8) FINAL VALIDATION: Run 'poetry run invoke tests' to ensure no regression in the entire test suite before marking complete.",
+        "testStrategy": "Document all functionality with clear examples emphasizing synchronous interface. Verify documentation accuracy through manual testing. Ensure all automated tests pass consistently and maintain high code coverage without async/await conflicts. Run 'poetry run invoke tests' as final validation step.",
         "subtasks": []
       }
     ],
     "metadata": {
       "created": "2025-07-07T01:53:45.723Z",
-      "updated": "2025-07-07T03:02:29.178Z",
+      "updated": "2025-07-08T02:36:29.703Z",
       "description": "Tasks for master context"
     }
   }

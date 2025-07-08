@@ -129,8 +129,10 @@ class PushNotificationConfig(NotificationConfig):
         if self.message_format is None:
             self.message_format = "plain_text"
 
-        if self.message_format not in ["plain_text", "markdown", "html"]:
-            raise ValueError("message_format must be 'plain_text', 'markdown', or 'html'.")
+        if self.message_format not in ["plain_text", "markdown", "markdownv2", "html"]:
+            raise ValueError(
+                "message_format must be 'plain_text', 'markdown', 'markdownv2', or 'html'."
+            )
 
     def handle_with_description(self: "PushNotificationConfig") -> None:
         if self.with_description is None:
@@ -189,7 +191,7 @@ class PushNotificationConfig(NotificationConfig):
                         f"AI: {rating.comment}"
                     )
                 )
-            elif self.message_format == "markdown":
+            elif self.message_format == "markdown" or self.message_format == "markdownv2":
                 desc_newline = "\n" if desc else ""
                 msg = (
                     (
