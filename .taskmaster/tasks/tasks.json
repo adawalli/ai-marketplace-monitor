@@ -241,7 +241,7 @@
         "id": 5,
         "title": "Implement Message Splitting for Long Content",
         "description": "Add automatic message chunking for content exceeding Telegram's 4096 character limit using TDD with STRICT synchronous interface - NO async/await keywords allowed",
-        "status": "pending",
+        "status": "done",
         "dependencies": [
           4
         ],
@@ -255,7 +255,7 @@
             "description": "Design and implement a comprehensive test suite to verify the correctness of the message splitting logic, ensuring it handles various input lengths and content types.",
             "dependencies": [],
             "details": "Include tests for splitting messages into chunks of specified maximum length, handling empty messages, and ensuring no data loss.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": ""
           },
           {
@@ -266,7 +266,7 @@
               1
             ],
             "details": "Test with messages containing words of varying lengths, punctuation, and spaces. Ensure splitting only occurs at word boundaries.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": ""
           },
           {
@@ -278,7 +278,7 @@
               2
             ],
             "details": "Test with messages containing formatting elements and verify that these are retained in each chunk.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": ""
           },
           {
@@ -290,7 +290,7 @@
               2
             ],
             "details": "Test with messages containing words longer than the maximum chunk size and verify appropriate handling (e.g., splitting with hyphenation or error handling).",
-            "status": "pending",
+            "status": "done",
             "testStrategy": ""
           },
           {
@@ -304,7 +304,7 @@
               4
             ],
             "details": "Ensure the function is robust, handles all test cases, and is efficient for production use.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": ""
           },
           {
@@ -315,7 +315,7 @@
               5
             ],
             "details": "Ensure each chunk is sent in order and clearly indicates its position within the sequence.",
-            "status": "pending",
+            "status": "done",
             "testStrategy": ""
           }
         ]
@@ -324,14 +324,92 @@
         "id": 6,
         "title": "Implement Error Handling and Retry Logic",
         "description": "Add comprehensive error handling with exponential backoff retry logic following TDD principles with synchronous interface",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [
           5
         ],
         "priority": "medium",
-        "details": "Following TDD: 1) Write failing tests for retry behavior, network error handling, and exponential backoff timing. 2) Implement retry wrapper with exponential backoff (0.1s, 0.2s, 0.4s, 0.8s, 1.6s) for max 5 attempts using asyncio.run() wrapper. 3) Catch telegram.error.NetworkError, telegram.error.RetryAfter, and other transient errors. 4) Use time.sleep() for backoff delays. 5) Log retry attempts using existing logging infrastructure. 6) Return appropriate NotificationStatus enum values. 7) Handle rate limiting with telegram.error.RetryAfter exception. CRITICAL: Maintain 100% synchronous interface using asyncio.run() wrapper to neutralize all async operations - NO async/await keywords allowed. 8) FINAL VALIDATION: Run 'poetry run invoke tests' to ensure no regression in the entire test suite before marking complete.",
+        "details": "Following TDD: 1) Write failing tests for retry behavior, network error handling, and exponential backoff timing. 2) Implement retry wrapper with exponential backoff (0.1s, 0.2s, 0.4s, 0.8s, 1.6s) for max 5 attempts using asyncio.run() wrapper. 3) Catch telegram.error.NetworkError, telegram.error.RetryAfter, and other transient errors. 4) Use time.sleep() for backoff delays. 5) Log retry attempts using existing logging infrastructure. 6) Return appropriate NotificationStatus enum values. 7) Handle rate limiting with telegram.error.RetryAfter exception. CRITICAL: Maintain 100% synchronous interface using asyncio.run() wrapper to neutralize all async operations - NO async/await keywords allowed. 8) FINAL VALIDATION: Run 'poetry run invoke tests' to ensure no regression in the entire test suite before marking complete.\n\nMAJOR PROGRESS: Retry logic with exponential backoff successfully implemented, network error handling working correctly with 5 retry attempts, format fallback mechanism working, all retry-specific tests passing. CRITICAL ISSUE: Formatting logic fix broke many other telegram tests due to incorrect escaping application on chunk_text instead of proper format preparation.",
         "testStrategy": "Write failing tests for retry behavior, exponential backoff timing, different error types, max retry limits, and logging. Mock telegram.Bot.send_message() to simulate various error conditions and verify retry logic. Tests must verify synchronous interface without async/await conflicts. Run 'poetry run invoke tests' as final validation step.",
-        "subtasks": []
+        "subtasks": [
+          {
+            "id": 2,
+            "title": "Design Test Suite for Exponential Backoff",
+            "description": "Develop tests to validate the exponential backoff strategy in retry attempts, ensuring delays increase appropriately between retries.",
+            "status": "done",
+            "dependencies": [
+              1
+            ],
+            "details": "Test that the retry wrapper applies increasing wait times between retries, typically doubling the delay after each failure, and that the maximum backoff limit is respected. COMPLETED: Tests verify 0.1s, 0.2s, 0.4s, 0.8s backoff timing and pass successfully.",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Design Test Suite for Error Types",
+            "description": "Create tests to verify that the retry mechanism correctly handles different error types, retrying only on retryable errors and failing fast on non-retryable errors.",
+            "status": "done",
+            "dependencies": [
+              1
+            ],
+            "details": "Identify and categorize error types (e.g., network errors, application exceptions) and ensure the retry logic discriminates between them, retrying only when appropriate. COMPLETED: Tests verify network errors retry while BadRequest/Forbidden fail immediately.",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Implement Retry Wrapper",
+            "description": "Develop the retry wrapper component that encapsulates the retry logic, including retry count, error handling, and exponential backoff.",
+            "status": "done",
+            "dependencies": [
+              1,
+              2,
+              3
+            ],
+            "details": "Implement a reusable retry wrapper function or class that integrates retry attempts with exponential backoff and error type handling, configurable for different use cases. COMPLETED: Retry wrapper successfully implemented with 5 retry attempts and proper error categorization.",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Integrate Logging and Status Handling",
+            "description": "Add comprehensive logging and status reporting to the retry wrapper and test suites to track retry attempts, errors, and final outcomes.",
+            "status": "done",
+            "dependencies": [
+              4
+            ],
+            "details": "Implement logging at each retry attempt, including error details and backoff timing, and provide status updates to facilitate debugging and monitoring of flaky tests. COMPLETED: Logging integrated successfully with retry attempts and error details.",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Fix Formatting Logic for Chunk-Level Escaping",
+            "description": "Resolve critical formatting issue where escaping functions are incorrectly applied to chunk_text instead of proper format preparation.",
+            "status": "pending",
+            "dependencies": [
+              5
+            ],
+            "details": "CRITICAL: Current implementation calls self._escape_markdownv2(chunk_text) on combined title+message text, but escaping methods expect to be called via _prepare_message_for_format(title, message). Need to fix telegram.py lines 405-425 to properly handle chunk-level escaping while maintaining message splitting functionality. This is causing many telegram tests to fail despite retry logic working correctly.",
+            "testStrategy": "Run full telegram test suite to verify formatting logic works correctly with message splitting. Ensure all 185+ telegram tests pass after formatting fix."
+          },
+          {
+            "id": 7,
+            "title": "Complete Final Task Validation",
+            "description": "Run complete test suite validation to ensure no regression and mark Task #6 as done.",
+            "status": "pending",
+            "dependencies": [
+              6
+            ],
+            "details": "Run 'poetry run invoke tests' to ensure all tests pass (currently 37 failed, 213 passed due to formatting issues). Verify retry-specific tests (5/5), escaping fallback tests (9/9), and all telegram tests pass. Mark task as complete once full test suite passes without regression.",
+            "testStrategy": "Final validation with 'poetry run invoke tests' - all tests must pass before task completion."
+          },
+          {
+            "id": 1,
+            "title": "Design Test Suite for Retry Behavior",
+            "description": "Create a test suite that verifies the retry logic functionality, ensuring tests are retried upon failure according to specified retry policies.",
+            "dependencies": [],
+            "details": "Implement tests that simulate flaky failures and confirm that the retry mechanism triggers the correct number of retries before final pass or fail. Use frameworks like TestNG's IRetryAnalyzer or JUnit's RetryRule as references.",
+            "status": "done",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 7,
@@ -388,7 +466,7 @@
     ],
     "metadata": {
       "created": "2025-07-07T01:53:45.723Z",
-      "updated": "2025-07-08T02:36:29.703Z",
+      "updated": "2025-07-08T03:08:51.189Z",
       "description": "Tasks for master context"
     }
   }

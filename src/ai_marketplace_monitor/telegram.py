@@ -186,6 +186,144 @@ class TelegramNotificationConfig(PushNotificationConfig):
             # Fallback to plain text for unknown formats
             return self._prepare_plain_text(title, message)
 
+    def split_message(self: "TelegramNotificationConfig", title: str, message: str) -> List[str]:
+        """Split message into chunks that respect Telegram's 4096 character limit.
+
+        This method splits long messages into multiple chunks while:
+        - Respecting word boundaries when possible
+        - Preserving formatting for the selected message format
+        - Handling edge cases like single words longer than the limit
+        - Adding chunk indicators (1/3, 2/3, etc.) for multi-chunk messages
+
+        Args:
+            title: The message title
+            message: The message content
+
+        Returns:
+            List of message chunks, each under 4096 characters
+
+        Raises:
+            ValueError: If title or message are empty/invalid
+        """
+        # Validate inputs
+        if not isinstance(title, str) or not title or not title.strip():
+            raise ValueError("title must be a non-empty string")
+        if not isinstance(message, str) or not message or not message.strip():
+            raise ValueError("message must be a non-empty string")
+
+        title = title.strip()
+        message = message.strip()
+
+        # Telegram's message limit
+        max_message_length = 4096
+
+        # Create the full message with title
+        full_message = f"{title}\n\n{message}"
+
+        # If the complete message fits within the limit, return as single chunk
+        if len(full_message) <= max_message_length:
+            return [full_message]
+
+        # Message needs to be split - first pass to create raw chunks
+        raw_chunks = []
+        remaining_message = message
+        is_first_chunk = True
+
+        while remaining_message:
+            # Reserve space for chunk indicators (e.g., "(1/3) ")
+            chunk_indicator_space = 10  # Reserve space for indicators like "(99/99) "
+
+            # Calculate available space for this chunk
+            if is_first_chunk:
+                # First chunk includes title
+                available_space = (
+                    max_message_length - len(title) - 2 - chunk_indicator_space
+                )  # -2 for "\n\n"
+                chunk_prefix = f"{title}\n\n"
+            else:
+                # Subsequent chunks don't include title
+                available_space = max_message_length - chunk_indicator_space
+                chunk_prefix = ""
+
+            # If remaining message fits in available space, add it and we're done
+            if len(remaining_message) <= available_space:
+                raw_chunks.append(chunk_prefix + remaining_message)
+                break
+
+            # Find the best split point within available space
+            split_point = self._find_split_point(remaining_message, available_space)
+
+            # Extract the chunk content
+            chunk_content = remaining_message[:split_point]
+            raw_chunks.append(chunk_prefix + chunk_content)
+
+            # Update remaining message
+            remaining_message = remaining_message[split_point:].lstrip()
+            is_first_chunk = False
+
+        # Second pass: add chunk indicators if we have multiple chunks
+        if len(raw_chunks) == 1:
+            return raw_chunks
+
+        # Add chunk indicators to each chunk
+        final_chunks = []
+        total_chunks = len(raw_chunks)
+
+        for i, chunk in enumerate(raw_chunks):
+            chunk_number = i + 1
+            indicator = f"({chunk_number}/{total_chunks}) "
+
+            # Add indicator at the beginning of each chunk
+            final_chunks.append(indicator + chunk)
+
+        return final_chunks
+
+    def _find_split_point(self: "TelegramNotificationConfig", text: str, max_length: int) -> int:
+        """Find the best point to split text while respecting word boundaries.
+
+        Args:
+            text: The text to split
+            max_length: Maximum length for this chunk
+
+        Returns:
+            Index where to split the text
+        """
+        if len(text) <= max_length:
+            return len(text)
+
+        # If we have a single word longer than max_length, we have to split it
+        if " " not in text[:max_length] and "\n" not in text[:max_length]:
+            # Split at character boundary with continuation indicator
+            return max_length - 10  # Leave some space for continuation indicator
+
+        # Find the last space or newline within the limit
+        split_candidates = []
+
+        # Look for newlines (paragraph breaks are ideal split points)
+        for i in range(max_length - 1, -1, -1):
+            if text[i] == "\n":
+                # Prefer splitting at paragraph breaks
+                if i > 0 and text[i - 1] == "\n":
+                    split_candidates.append((i + 1, 3))  # High priority
+                else:
+                    split_candidates.append((i + 1, 2))  # Medium priority
+
+        # Look for spaces (word boundaries)
+        for i in range(max_length - 1, -1, -1):
+            if text[i] == " ":
+                split_candidates.append((i + 1, 1))  # Lower priority
+            elif text[i] in ".,!?;:":
+                split_candidates.append((i + 1, 2))  # Medium priority (after punctuation)
+
+        # Sort by priority (highest first) and then by position (latest first)
+        split_candidates.sort(key=lambda x: (-x[1], -x[0]))
+
+        if split_candidates:
+            return split_candidates[0][0]
+
+        # Fallback: split at max_length (shouldn't happen with the logic above)
+        return max_length
+
     def handle_message_format(self: "TelegramNotificationConfig") -> None:
         if self.message_format is None:
             self.message_format = "markdownv2"
@@ -202,8 +340,12 @@ class TelegramNotificationConfig(PushNotificationConfig):
         message: str,
         logger: Logger | None = None,
     ) -> bool:
-        """Send message via Telegram Bot API"""
+        """Send message via Telegram Bot API with automatic message splitting and retry logic"""
         import asyncio
+        import http.client
+        import socket
+        import ssl
+        import time
 
         import telegram
 
@@ -231,6 +373,10 @@ class TelegramNotificationConfig(PushNotificationConfig):
         if self.message_format not in valid_formats:
             raise ValueError(f"Invalid message format. Must be one of {valid_formats}")
 
+        # Retry configuration
+        max_retries = 5
+        base_delay = 0.1
+
         # Define fallback sequence
         fallback_formats = []
         if self.message_format == "markdownv2":
@@ -242,52 +388,158 @@ class TelegramNotificationConfig(PushNotificationConfig):
         # plain_text has no fallbacks
 
         # Define async function to send telegram message
-        async def _send_telegram_message():
+        async def _send_telegram_message(text: str, parse_mode: str | None):
             bot = telegram.Bot(token=self.telegram_bot_token)
             await bot.send_message(
                 chat_id=self.telegram_chat_id,
-                text=current_msg_text,
-                parse_mode=current_msg_parse_mode,
+                text=text,
+                parse_mode=parse_mode,
             )
             return True
-            # Use asyncio.run to maintain synchronous interface
 
         # Try primary format first
         formats_to_try = [self.message_format, *fallback_formats]
 
         for attempt_format in formats_to_try:
             try:
-                # Prepare message for this format
-                if attempt_format == "plain_text":
-                    current_msg_text, current_msg_parse_mode = self._prepare_plain_text(
-                        title, message
-                    )
-                elif attempt_format == "markdown":
-                    current_msg_text, current_msg_parse_mode = self._prepare_markdown(
-                        title, message
-                    )
-                elif attempt_format == "markdownv2":
-                    current_msg_text, current_msg_parse_mode = self._prepare_markdownv2(
-                        title, message
-                    )
-                elif attempt_format == "html":
-                    current_msg_text, current_msg_parse_mode = self._prepare_html(title, message)
-                else:
-                    # Unknown format, fallback to plain text
-                    current_msg_text, current_msg_parse_mode = self._prepare_plain_text(
-                        title, message
-                    )
+                # Split message into chunks first (using original unescaped message)
+                chunks = self.split_message(title, message)
 
-                # Execute async function synchronously
-                result = asyncio.run(_send_telegram_message())
+                # Send all chunks for this format with retry logic
+                for chunk_text in chunks:
+                    # Apply format-specific escaping to each chunk
+                    if attempt_format == "plain_text":
+                        current_msg_text, current_msg_parse_mode = chunk_text, None
+                    elif attempt_format == "markdown":
+                        current_msg_text, current_msg_parse_mode = chunk_text, "Markdown"
+                    elif attempt_format == "markdownv2":
+                        # Apply MarkdownV2 escaping to this chunk
+                        current_msg_text = self._escape_markdownv2(chunk_text)
+                        current_msg_parse_mode = "MarkdownV2"
+                    elif attempt_format == "html":
+                        # Apply HTML escaping to this chunk
+                        current_msg_text = self._escape_html(chunk_text)
+                        current_msg_parse_mode = "HTML"
+                    else:
+                        # Unknown format, fallback to plain text
+                        current_msg_text, current_msg_parse_mode = chunk_text, None
 
-                # If we get here, the message was sent successfully
+                    # Retry logic for each chunk
+                    for retry_attempt in range(max_retries):
+                        try:
+                            # Execute async function synchronously
+                            result = asyncio.run(
+                                _send_telegram_message(current_msg_text, current_msg_parse_mode)
+                            )
+
+                            if result:
+                                break  # Success, move to next chunk
+                            else:
+                                return False
+
+                        except telegram.error.RetryAfter as e:
+                            if retry_attempt < max_retries - 1:
+                                sleep_time = e.retry_after
+                                if logger:
+                                    logger.info(f"Rate limited, retrying in {sleep_time}s")
+                                time.sleep(sleep_time)
+                            else:
+                                if logger:
+                                    logger.error(f"Max retries exceeded for rate limit: {e}")
+                                return False
+
+                        except (
+                            telegram.error.NetworkError,
+                            ConnectionError,
+                            TimeoutError,
+                            asyncio.TimeoutError,
+                            OSError,
+                            socket.error,
+                            socket.gaierror,
+                            ssl.SSLError,
+                            http.client.HTTPException,
+                        ) as e:
+                            if retry_attempt < max_retries - 1:
+                                sleep_time = base_delay * (2**retry_attempt)
+                                if logger:
+                                    logger.warning(
+                                        f"Network error, retrying in {sleep_time}s: {e}"
+                                    )
+                                time.sleep(sleep_time)
+                            else:
+                                if logger:
+                                    logger.error(f"Max retries exceeded for network error: {e}")
+                                return False
+
+                        except (
+                            telegram.error.BadRequest,
+                            telegram.error.Forbidden,
+                            telegram.error.InvalidToken,
+                        ) as e:
+                            # Non-retryable errors - check if format-related first
+                            error_message = str(e).lower()
+                            is_format_error = any(
+                                keyword in error_message
+                                for keyword in [
+                                    "parse",
+                                    "parsing",
+                                    "markdown",
+                                    "html",
+                                    "format",
+                                    "entity",
+                                    "tag",
+                                ]
+                            )
+
+                            if is_format_error:
+                                # Format error - let outer loop handle fallback
+                                raise e
+                            else:
+                                # Non-retryable non-format error
+                                if logger:
+                                    logger.error(f"Non-retryable error: {e}")
+                                return False
+
+                        except Exception as e:
+                            # Check if this might be a format-related error that should trigger fallback
+                            error_message = str(e).lower()
+                            is_format_error = any(
+                                keyword in error_message
+                                for keyword in [
+                                    "parse",
+                                    "parsing",
+                                    "markdown",
+                                    "html",
+                                    "format",
+                                    "entity",
+                                    "tag",
+                                ]
+                            )
+
+                            if is_format_error:
+                                # Format error - let outer loop handle fallback
+                                raise e
+
+                            # Other errors - retry with exponential backoff
+                            if retry_attempt < max_retries - 1:
+                                sleep_time = base_delay * (2**retry_attempt)
+                                if logger:
+                                    logger.warning(
+                                        f"Unexpected error, retrying in {sleep_time}s: {e}"
+                                    )
+                                time.sleep(sleep_time)
+                            else:
+                                if logger:
+                                    logger.error(f"Max retries exceeded for unexpected error: {e}")
+                                return False
+
+                # If we get here, all chunks were sent successfully
                 if logger and attempt_format != self.message_format:
                     logger.warning(
                         f"Telegram message sent using fallback format '{attempt_format}' instead of '{self.message_format}'"
                     )
 
-                return result
+                return True
 
             except Exception as e:
                 # Check if this is a formatting-related error that should trigger fallback

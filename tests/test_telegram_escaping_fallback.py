@@ -258,13 +258,20 @@ class TestTelegramEscapingAndFallback:
         mock_bot_instance.send_message = AsyncMock(side_effect=Exception("Network timeout"))
 
         with patch("telegram.Bot", return_value=mock_bot_instance):
-            result = config.send_message(title=test_title, message=test_message, logger=None)
+            with patch("time.sleep") as mock_sleep:
+                result = config.send_message(title=test_title, message=test_message, logger=None)
 
-            # Should fail without fallback for network errors
-            assert result is False
+                # Should fail without fallback for network errors
+                assert result is False
 
-            # Should only make one attempt (no fallback for network errors)
-            assert mock_bot_instance.send_message.call_count == 1
+                # Should retry network errors 5 times (no fallback for network errors)
+                assert mock_bot_instance.send_message.call_count == 5
+                # Should sleep 4 times between retries
+                assert mock_sleep.call_count == 4
+
+                # All calls should use the same format (no fallback)
+                for call in mock_bot_instance.send_message.call_args_list:
+                    assert call[1]["parse_mode"] == "MarkdownV2"
 
     def test_plain_text_never_fails_formatting(self):
         """Test that plain text format never requires fallback."""

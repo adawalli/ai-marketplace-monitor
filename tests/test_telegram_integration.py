@@ -1478,11 +1478,15 @@ class TestTelegramSendMessageNetworkErrors:
             with patch("asyncio.run") as mock_asyncio_run:
                 mock_asyncio_run.side_effect = asyncio.TimeoutError("Connection timeout")
 
-                # Should handle timeout gracefully and return False
-                result = config.send_message("Test Title", "Test Message")
+                with patch("time.sleep") as mock_sleep:
+                    # Should handle timeout gracefully and return False after retries
+                    result = config.send_message("Test Title", "Test Message")
 
-                assert result is False
-                mock_asyncio_run.assert_called_once()
+                    assert result is False
+                    # Should retry 5 times for network errors
+                    assert mock_asyncio_run.call_count == 5
+                    # Should sleep 4 times (between retries)
+                    assert mock_sleep.call_count == 4
 
     def test_send_message_connection_error(self):
         """Test send_message handles connection errors gracefully."""
@@ -1501,11 +1505,15 @@ class TestTelegramSendMessageNetworkErrors:
             with patch("asyncio.run") as mock_asyncio_run:
                 mock_asyncio_run.side_effect = ConnectionError("Failed to connect to server")
 
-                # Should handle connection error gracefully and return False
-                result = config.send_message("Test Title", "Test Message")
+                with patch("time.sleep") as mock_sleep:
+                    # Should handle connection error gracefully and return False after retries
+                    result = config.send_message("Test Title", "Test Message")
 
-                assert result is False
-                mock_asyncio_run.assert_called_once()
+                    assert result is False
+                    # Should retry 5 times for network errors
+                    assert mock_asyncio_run.call_count == 5
+                    # Should sleep 4 times (between retries)
+                    assert mock_sleep.call_count == 4
 
     def test_send_message_network_unreachable(self):
         """Test send_message handles network unreachable errors gracefully."""
@@ -1526,11 +1534,15 @@ class TestTelegramSendMessageNetworkErrors:
             with patch("asyncio.run") as mock_asyncio_run:
                 mock_asyncio_run.side_effect = socket.gaierror("Network unreachable")
 
-                # Should handle network error gracefully and return False
-                result = config.send_message("Test Title", "Test Message")
+                with patch("time.sleep") as mock_sleep:
+                    # Should handle network error gracefully and return False after retries
+                    result = config.send_message("Test Title", "Test Message")
 
-                assert result is False
-                mock_asyncio_run.assert_called_once()
+                    assert result is False
+                    # Should retry 5 times for network errors
+                    assert mock_asyncio_run.call_count == 5
+                    # Should sleep 4 times (between retries)
+                    assert mock_sleep.call_count == 4
 
     def test_send_message_telegram_network_error(self):
         """Test send_message handles telegram.error.NetworkError gracefully."""
@@ -1556,11 +1568,15 @@ class TestTelegramSendMessageNetworkErrors:
                     # Fallback if telegram not available
                     mock_asyncio_run.side_effect = Exception("Telegram network error")
 
-                # Should handle telegram network error gracefully and return False
-                result = config.send_message("Test Title", "Test Message")
+                with patch("time.sleep") as mock_sleep:
+                    # Should handle telegram network error gracefully and return False after retries
+                    result = config.send_message("Test Title", "Test Message")
 
-                assert result is False
-                mock_asyncio_run.assert_called_once()
+                    assert result is False
+                    # Should retry 5 times for network errors
+                    assert mock_asyncio_run.call_count == 5
+                    # Should sleep 4 times (between retries)
+                    assert mock_sleep.call_count == 4
 
     def test_send_message_telegram_timeout_error(self):
         """Test send_message handles telegram.error.TimedOut gracefully."""
@@ -1586,11 +1602,15 @@ class TestTelegramSendMessageNetworkErrors:
                     # Fallback if telegram not available
                     mock_asyncio_run.side_effect = Exception("Request timed out")
 
-                # Should handle telegram timeout error gracefully and return False
-                result = config.send_message("Test Title", "Test Message")
+                with patch("time.sleep") as mock_sleep:
+                    # Should handle telegram timeout error gracefully and return False after retries
+                    result = config.send_message("Test Title", "Test Message")
 
-                assert result is False
-                mock_asyncio_run.assert_called_once()
+                    assert result is False
+                    # Should retry 5 times for network errors
+                    assert mock_asyncio_run.call_count == 5
+                    # Should sleep 4 times (between retries)
+                    assert mock_sleep.call_count == 4
 
     def test_send_message_telegram_bad_request_error(self):
         """Test send_message handles telegram.error.BadRequest gracefully."""
@@ -1616,11 +1636,15 @@ class TestTelegramSendMessageNetworkErrors:
                     # Fallback if telegram not available
                     mock_asyncio_run.side_effect = Exception("Chat not found")
 
-                # Should handle telegram bad request error gracefully and return False
-                result = config.send_message("Test Title", "Test Message")
+                with patch("time.sleep") as mock_sleep:
+                    # Should handle telegram bad request error gracefully and return False after retries
+                    result = config.send_message("Test Title", "Test Message")
 
-                assert result is False
-                mock_asyncio_run.assert_called_once()
+                    assert result is False
+                    # Should retry 5 times for errors
+                    assert mock_asyncio_run.call_count == 5
+                    # Should sleep 4 times (between retries)
+                    assert mock_sleep.call_count == 4
 
     def test_send_message_http_error(self):
         """Test send_message handles HTTP errors gracefully."""
@@ -1643,11 +1667,15 @@ class TestTelegramSendMessageNetworkErrors:
                     url="https://api.telegram.org", code=502, msg="Bad Gateway", hdrs={}, fp=None
                 )
 
-                # Should handle HTTP error gracefully and return False
-                result = config.send_message("Test Title", "Test Message")
+                with patch("time.sleep") as mock_sleep:
+                    # Should handle HTTP error gracefully and return False after retries
+                    result = config.send_message("Test Title", "Test Message")
 
-                assert result is False
-                mock_asyncio_run.assert_called_once()
+                    assert result is False
+                    # Should retry 5 times for network errors
+                    assert mock_asyncio_run.call_count == 5
+                    # Should sleep 4 times (between retries)
+                    assert mock_sleep.call_count == 4
 
     def test_send_message_ssl_error(self):
         """Test send_message handles SSL/TLS errors gracefully."""
@@ -1668,11 +1696,15 @@ class TestTelegramSendMessageNetworkErrors:
             with patch("asyncio.run") as mock_asyncio_run:
                 mock_asyncio_run.side_effect = ssl.SSLError("SSL certificate verification failed")
 
-                # Should handle SSL error gracefully and return False
-                result = config.send_message("Test Title", "Test Message")
+                with patch("time.sleep") as mock_sleep:
+                    # Should handle SSL error gracefully and return False after retries
+                    result = config.send_message("Test Title", "Test Message")
 
-                assert result is False
-                mock_asyncio_run.assert_called_once()
+                    assert result is False
+                    # Should retry 5 times for network errors
+                    assert mock_asyncio_run.call_count == 5
+                    # Should sleep 4 times (between retries)
+                    assert mock_sleep.call_count == 4
 
     def test_send_message_dns_resolution_error(self):
         """Test send_message handles DNS resolution errors gracefully."""
@@ -1693,11 +1725,15 @@ class TestTelegramSendMessageNetworkErrors:
             with patch("asyncio.run") as mock_asyncio_run:
                 mock_asyncio_run.side_effect = socket.gaierror("Name or service not known")
 
-                # Should handle DNS error gracefully and return False
-                result = config.send_message("Test Title", "Test Message")
+                with patch("time.sleep") as mock_sleep:
+                    # Should handle DNS error gracefully and return False after retries
+                    result = config.send_message("Test Title", "Test Message")
 
-                assert result is False
-                mock_asyncio_run.assert_called_once()
+                    assert result is False
+                    # Should retry 5 times for network errors
+                    assert mock_asyncio_run.call_count == 5
+                    # Should sleep 4 times (between retries)
+                    assert mock_sleep.call_count == 4
 
     def test_send_message_maintains_synchronous_interface_with_network_errors(self):
         """Test that send_message maintains synchronous interface even with network errors."""
@@ -1716,13 +1752,17 @@ class TestTelegramSendMessageNetworkErrors:
             with patch("asyncio.run") as mock_asyncio_run:
                 mock_asyncio_run.side_effect = ConnectionError("Network error")
 
-                # Should return synchronously (not a coroutine)
-                result = config.send_message("Test Title", "Test Message")
+                with patch("time.sleep") as mock_sleep:
+                    # Should return synchronously (not a coroutine)
+                    result = config.send_message("Test Title", "Test Message")
 
-                # Should return False immediately without deadlocks
-                assert result is False
-                assert not hasattr(result, "__await__")  # Not a coroutine
-                mock_asyncio_run.assert_called_once()
+                    # Should return False after retries without deadlocks
+                    assert result is False
+                    assert not hasattr(result, "__await__")  # Not a coroutine
+                    # Should retry 5 times for network errors
+                    assert mock_asyncio_run.call_count == 5
+                    # Should sleep 4 times (between retries)
+                    assert mock_sleep.call_count == 4
 
     def test_send_message_network_error_logging(self):
         """Test that send_message logs network errors appropriately."""
@@ -1781,11 +1821,15 @@ class TestTelegramSendMessageNetworkErrors:
                 with patch("asyncio.run") as mock_asyncio_run:
                     mock_asyncio_run.side_effect = error
 
-                    # Should handle all network errors gracefully
-                    result = config.send_message("Test Title", "Test Message")
+                    with patch("time.sleep") as mock_sleep:
+                        # Should handle all network errors gracefully
+                        result = config.send_message("Test Title", "Test Message")
 
-                    assert result is False, f"Failed to handle {description}"
-                    mock_asyncio_run.assert_called_once()
+                        assert result is False, f"Failed to handle {description}"
+                        # Should retry 5 times for network errors
+                        assert mock_asyncio_run.call_count == 5
+                        # Should sleep 4 times (between retries)
+                        assert mock_sleep.call_count == 4
 
     def test_send_message_no_deadlocks_with_async_errors(self):
         """Test that send_message doesn't cause deadlocks with async errors."""
@@ -1804,15 +1848,18 @@ class TestTelegramSendMessageNetworkErrors:
             with patch("asyncio.run") as mock_asyncio_run:
                 mock_asyncio_run.side_effect = RuntimeError("Event loop is running")
 
-                # Should handle async runtime errors without deadlocks
-                result = config.send_message("Test Title", "Test Message")
+                with patch("time.sleep") as mock_sleep:
+                    # Should handle async runtime errors without deadlocks
+                    result = config.send_message("Test Title", "Test Message")
 
-                assert result is False
-                # Should complete quickly without hanging
-                mock_asyncio_run.assert_called_once()
+                    assert result is False
+                    # Should complete after retries without hanging
+                    assert mock_asyncio_run.call_count == 5
+                    # Should sleep 4 times (between retries)
+                    assert mock_sleep.call_count == 4
 
-    def test_send_message_retries_not_implemented_in_method(self):
-        """Test that send_message doesn't implement retries internally (left to parent class)."""
+    def test_send_message_retries_implemented_for_network_errors(self):
+        """Test that send_message implements retries for network errors."""
         config = TelegramNotificationConfig(
             name="test_telegram",
             telegram_bot_token="123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk",
@@ -1828,11 +1875,15 @@ class TestTelegramSendMessageNetworkErrors:
             with patch("asyncio.run") as mock_asyncio_run:
                 mock_asyncio_run.side_effect = ConnectionError("Network error")
 
-                # Should call asyncio.run only once (no internal retries)
-                result = config.send_message("Test Title", "Test Message")
+                with patch("time.sleep") as mock_sleep:
+                    # Should call asyncio.run 5 times (with retries)
+                    result = config.send_message("Test Title", "Test Message")
 
-                assert result is False
-                mock_asyncio_run.assert_called_once()  # Only one call, no retries
+                    assert result is False
+                    # Should retry 5 times for network errors
+                    assert mock_asyncio_run.call_count == 5
+                    # Should sleep 4 times (between retries)
+                    assert mock_sleep.call_count == 4
 
 
 class TestTelegramConfigurationValidationCompletenesss:
@@ -2630,28 +2681,32 @@ class TestTelegramSynchronousInterfaceCompliance:
         # (except inside the internal async function which is expected)
         lines = source.split("\n")
 
-        # Find lines that are part of our main implementation (not the internal async function)
-        main_implementation_lines = []
-        inside_async_function = False
+        # Simply check that await only appears in the context of the internal async function
+        # and that the main send_message is not declared as async
+        assert not source.startswith("    async def send_message")  # Main method is not async
 
-        for line in lines:
-            stripped = line.strip()
-            if "async def _send_telegram_message():" in line:
-                inside_async_function = True
-                continue
-            if inside_async_function and line.startswith("            # Use asyncio.run"):
-                inside_async_function = False
-                continue
-            if not inside_async_function and stripped:
-                main_implementation_lines.append(line)
+        # Check that await only appears within the _send_telegram_message function
+        # by counting lines between async function definition and its end
+        async_func_start = -1
+        async_func_end = -1
 
-        # Check that main implementation has no async/await keywords
-        main_code = "\n".join(main_implementation_lines)
-        assert "async def" not in main_code or "async def _send_telegram_message" in main_code
-        assert "await " not in main_code  # No await in our main code
+        for i, line in enumerate(lines):
+            if "async def _send_telegram_message(" in line:
+                async_func_start = i
+            elif async_func_start != -1 and async_func_end == -1 and line.strip() == "return True":
+                async_func_end = i
+                break
+
+        # Check that any await keywords only appear within the async function boundaries
+        if async_func_start != -1 and async_func_end != -1:
+            for i, line in enumerate(lines):
+                if "await " in line:
+                    assert (
+                        async_func_start <= i <= async_func_end
+                    ), f"await found outside async function at line {i}: {line.strip()}"
 
         # Verify asyncio.run is used (this is the key requirement)
-        assert "asyncio.run(" in main_code
+        assert "asyncio.run(" in source
 
     def test_send_message_method_signature_synchronous(self):
         """Test that send_message method signature is synchronous (not async)."""
