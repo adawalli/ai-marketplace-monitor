@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 import ai_marketplace_monitor
 from ai_marketplace_monitor import cli
 from ai_marketplace_monitor.config import Config
+from ai_marketplace_monitor.utils import MonitorConfig
 
 runner = CliRunner()
 
@@ -296,6 +297,7 @@ def test_config(config_file: Callable, config_content: str, acceptable: bool) ->
         "searched_count": int,
         "start_at": (list, type(None)),
         "username": (str, type(None)),
+        "monitor_config": MonitorConfig,
     }
     if acceptable:
         # print(config_content)
