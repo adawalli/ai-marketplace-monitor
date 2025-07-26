@@ -394,7 +394,9 @@ class MarketplaceMonitor:
         # Open a new browser page.
         self.load_config_file()
         assert self.config is not None
-        self.browser = self.playwright.chromium.launch(headless=self.headless)
+        self.browser = self.playwright.chromium.launch(
+            headless=self.headless, proxy=self.config.monitor.get_proxy_options()
+        )
         #
         assert self.browser is not None
         while True:
@@ -550,7 +552,9 @@ class MarketplaceMonitor:
                             self.logger.info(
                                 f"""{hilight("[Search]", "info")} Starting a browser because the item was not checked before."""
                             )
-                        self.browser = self.playwright.chromium.launch(headless=self.headless)
+                        self.browser = self.playwright.chromium.launch(
+                            headless=self.headless, proxy=self.config.monitor.get_proxy_options()
+                        )
                         marketplace.set_browser(self.browser)
 
                 # ignore enabled

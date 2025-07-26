@@ -302,14 +302,10 @@ def test_config(config_file: Callable, config_content: str, acceptable: bool) ->
         config = Config([cfg])
         # assert the types
         for key, value in asdict(config.marketplace["facebook"]).items():
-            if key == "monitor_config":
-                continue
             assert isinstance(value, key_types[key]), f"{key} must be of type {key_types[key]}"
 
         for item_cfg in config.item.values():
             for key, value in asdict(item_cfg).items():
-                if key == "monitor_config":
-                    continue
                 assert isinstance(value, key_types[key]), f"{key} must be of type {key_types[key]}"
         # test if all elements can be frozen
         for attr in ("item", "ai", "user", "marketplae"):

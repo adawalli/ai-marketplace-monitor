@@ -275,8 +275,8 @@ class FacebookMarketplace(Marketplace):
 
     def login(self: "FacebookMarketplace") -> None:
         assert self.browser is not None
-
-        self.page = self.create_page(swap_proxy=True)
+        context = self.browser.new_context()
+        self.page = context.new_page()
 
         # Navigate to the URL, no timeout
         self.goto_url(self.initial_url)
