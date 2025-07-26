@@ -2,6 +2,7 @@
 
 Execute 'invoke --list' for guidance on using Invoke
 """
+
 import os
 import platform
 import tempfile
@@ -104,13 +105,12 @@ def ruff(c: Context) -> None:
 @task()
 def security(c: Context) -> None:
     """Run security related checks."""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
         temp_file = f.name
     try:
+        _run(c, f"uv export --extra dev --format requirements-txt --no-hashes  > {temp_file}")
         _run(
             c,
-            f"uv export --extra dev --format requirements-txt --no-hashes  > {temp_file}")
-        _run(c,
             f"uv run pip-audit --requirement {temp_file} --format json",
         )
     finally:

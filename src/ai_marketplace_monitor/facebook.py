@@ -473,30 +473,19 @@ class FacebookMarketplace(Marketplace):
                         f"""{hilight(item_config.name)} from {hilight(cname or city)}"""
                         + (f" with radius={radius}" if radius else " with default radius")
                     )
-                retries = 0
-                while True:
-                    self.goto_url(
-                        marketplace_url + "&".join([f"query={quote(search_phrase)}", *options])
-                    )
 
-                    found_listings = FacebookSearchResultPage(
-                        self.page, self.translator, self.logger
-                    ).get_listings()
-                    time.sleep(5)
-                    if found_listings:
-                        break
-                    if retries > 5:
-                        if self.logger:
-                            self.logger.error(
-                                f"""{hilight("[Search]", "fail")} Failed to get search results for {search_phrase}"""
-                            )
-                        break
-                    else:
-                        retries += 1
-                        if self.logger:
-                            self.logger.debug(
-                                f"""{hilight("[Search]", "info")} Retrying to get search results for {search_phrase}"""
-                            )
+                self.goto_url(
+                    marketplace_url + "&".join([f"query={quote(search_phrase)}", *options])
+                )
+
+                found_listings = FacebookSearchResultPage(
+                    self.page, self.translator, self.logger
+                ).get_listings()
+                time.sleep(5)
+                if self.logger:
+                    self.logger.error(
+                        f"""{hilight("[Search]", "fail")} Failed to get search results for {search_phrase} from {city}"""
+                    )
 
                 counter.increment(CounterItem.SEARCH_PERFORMED, item_config.name)
 
@@ -688,6 +677,18 @@ class FacebookSearchResultPage(WebPage):
         return valid_listings
 
     def get_listings(self: "FacebookSearchResultPage") -> List[Listing]:
+        # if no result is found
+        btn = self.page.locator(f"""span:has-text('{self.translator("Browse Marketplace")}')""")
+        if btn.count() > 0:
+            msg = self._parent_with_cond(
+                btn.first,
+                lambda x: len(x) == 3
+                and self.translator("Browse Marketplace") in (x[-1].text_content() or ""),
+                1,
+            )
+            self.logger.info(f'{hilight("[Retrieve]", "dim")} {msg}')
+            return []
+
         # find the grid box
         try:
             valid_listings = (
@@ -1138,6 +1139,6 @@ def parse_listing(
         except KeyboardInterrupt:
             raise
         except Exception:
-            # try next page layout
+            # try next page ayout
             continue
     return None
