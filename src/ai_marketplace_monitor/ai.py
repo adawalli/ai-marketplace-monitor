@@ -271,7 +271,7 @@ class OpenAIBackend(AIBackend):
         res: AIResponse | None = AIResponse.from_cache(listing, item_config, marketplace_config)
         if res is not None:
             if self.logger:
-                self.logger.info(
+                self.logger.debug(
                     f"""{hilight("[AI]", res.style)} {self.config.name} previously concluded {hilight(f"{res.conclusion} ({res.score}): {res.comment}", res.style)} for listing {hilight(listing.title)}."""
                 )
             return res
