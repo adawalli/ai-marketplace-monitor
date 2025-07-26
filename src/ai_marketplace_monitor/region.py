@@ -23,7 +23,7 @@ class RegionConfig(BaseConfig):
 
     def handle_radius(self: "RegionConfig") -> None:
         if isinstance(self.radius, int):
-            self.radius = [self.radius]
+            self.radius = [self.radius] * len(self.search_city)
         elif not self.radius:
             self.radius = [500] * len(self.search_city)
         elif len(self.radius) != len(self.search_city):

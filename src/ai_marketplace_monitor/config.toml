@@ -321,6 +321,7 @@ locale = "Spanish"
 'Location is approximate' = 'La ubicación es aproximada'
 "About this vehicle" = 'Descripción del vendedor'
 "Seller's description" = 'Información sobre este vehículo'
+"Browse Marketplace" = 'Explorar Marketplace'
 
 [translation.zh]
 locale = "Chinese"
@@ -331,3 +332,15 @@ locale = "Chinese"
 'Location is approximate' = '我们只提供大概位置'
 "About this vehicle" = "车辆信息"
 "Seller's description" = "卖家描述"
+"Browse Marketplace" = '浏览 Marketplace'
+
+[translation.sv]
+locale = "Swedish"
+'Collection of Marketplace items' = 'Samling av Marketplace-objekt'
+'Condition' = 'Skick'
+'Description' = 'Beskrivning'
+'Details' = 'Detaljer'
+'Location is approximate' = 'Platsen är ungefärlig'
+"About this vehicle" = "Om detta fordon"
+"Seller's description" = "Säljarens beskrivning"
+"Browse Marketplace" = 'Bläddra på Marketplace'

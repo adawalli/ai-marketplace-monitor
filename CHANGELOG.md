@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.6]
+
+- Fix searching across regions.
+- Switch from `poetry` to `uv` for development.
+
 ## [0.9.5]
 
 - [issue 155](https://github.com/BoPeng/ai-marketplace-monitor/issues/155) Fix output of pushbullet
