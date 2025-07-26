@@ -680,13 +680,14 @@ class FacebookSearchResultPage(WebPage):
         # if no result is found
         btn = self.page.locator(f"""span:has-text('{self.translator("Browse Marketplace")}')""")
         if btn.count() > 0:
-            msg = self._parent_with_cond(
-                btn.first,
-                lambda x: len(x) == 3
-                and self.translator("Browse Marketplace") in (x[-1].text_content() or ""),
-                1,
-            )
-            self.logger.info(f'{hilight("[Retrieve]", "dim")} {msg}')
+            if self.logger:
+                msg = self._parent_with_cond(
+                    btn.first,
+                    lambda x: len(x) == 3
+                    and self.translator("Browse Marketplace") in (x[-1].text_content() or ""),
+                    1,
+                )
+                self.logger.info(f'{hilight("[Retrieve]", "dim")} {msg}')
             return []
 
         # find the grid box
