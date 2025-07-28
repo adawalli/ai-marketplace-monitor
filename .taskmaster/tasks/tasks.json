@@ -1,0 +1,141 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Setup Async Foundation Infrastructure",
+        "description": "Establish the basic async event loop foundation by converting the CLI entry point to use asyncio.run() while preserving existing synchronous behavior",
+        "details": "Convert cli.py main function to async and wrap with asyncio.run(). Update imports to support both sync and async patterns. Install required dependencies: playwright>=1.41.0 (async API), pytest-asyncio>=0.21.0, httpx>=0.25.0 for async HTTP operations. Create async wrapper functions that maintain identical behavior to current sync implementation. Ensure ProactorEventLoop is properly configured on Windows for Playwright subprocess support. Add basic async logging configuration to preserve existing Rich logging patterns.",
+        "testStrategy": "Run existing test suite to ensure no regressions. Create integration test that verifies asyncio.run() wrapper maintains exact same CLI behavior. Test keyboard interrupt handling works correctly with async event loop. Validate that existing schedule patterns can be replicated with asyncio tasks.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Migrate Core Monitor Loop to Async",
+        "description": "Convert MarketplaceMonitor class from synchronous to async implementation while maintaining sequential execution patterns and existing functionality",
+        "details": "Convert all MarketplaceMonitor methods to async def, particularly the main monitoring loop. Replace time.sleep() calls with asyncio.sleep() for non-blocking delays. Implement async context managers using @asynccontextmanager decorator for clean resource management. Convert schedule library usage to asyncio task scheduling with asyncio.create_task() and asyncio.sleep() patterns. Maintain existing error handling and logging behavior. Keep sequential execution initially - no concurrent processing yet. Add proper async exception handling and cleanup patterns.",
+        "testStrategy": "Unit tests for async MarketplaceMonitor methods using pytest.mark.asyncio. Integration tests verifying same search intervals and timing behavior. Test async context manager lifecycle with proper setup/teardown. Validate keyboard interrupt handling preserves statistics display and graceful shutdown.",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Convert Facebook Marketplace to Playwright Async API",
+        "description": "Migrate facebook.py from playwright.sync_api to playwright.async_api while preserving all existing scraping logic and error handling patterns",
+        "details": "Replace 'from playwright.sync_api import sync_playwright' with 'from playwright.async_api import async_playwright'. Convert all page navigation, element interactions, and browser lifecycle management to async patterns using await. Implement async context managers for browser and page lifecycle using 'async with async_playwright() as p' pattern. Update wait strategies to use page.wait_for_timeout() instead of time.sleep(). Maintain existing proxy configuration and headless browser settings. Preserve all current scraping selectors and pagination logic. Add proper async exception handling for browser operations with same retry patterns.",
+        "testStrategy": "Convert Playwright tests to async using pytest-playwright-asyncio. Test browser lifecycle with async context managers. Validate all existing scraping functionality works identically with async API. Test proxy support and headless mode configurations. Create async fixtures for browser testing.",
+        "priority": "high",
+        "dependencies": [
+          2
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Migrate AI Backend to Async OpenAI Client",
+        "description": "Convert ai.py from synchronous OpenAI client to AsyncOpenAI while maintaining identical AI evaluation behavior and caching patterns",
+        "details": "Replace 'from openai import OpenAI' with 'from openai import AsyncOpenAI'. Convert all client.chat.completions.create() calls to use await. Maintain existing prompt engineering and response parsing logic. Implement async retry mechanisms using exponential backoff for rate limiting (compatible with OpenAI's async client). Keep diskcache operations synchronous as the library is inherently sync. Add proper async exception handling for API calls. Consider httpx backend configuration for improved concurrency performance. Preserve existing token counting and cost calculation logic.",
+        "testStrategy": "Mock async OpenAI client for unit tests. Test async retry logic with rate limit simulation. Validate AI evaluation results are identical to sync version. Test concurrent AI evaluations (if implemented) maintain same rating consistency. Integration tests with real OpenAI API to verify async client behavior.",
+        "priority": "medium",
+        "dependencies": [
+          1
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Convert Notification System to Async HTTP Clients",
+        "description": "Migrate all notification providers in notification.py to use async HTTP clients while preserving existing notification delivery behavior",
+        "details": "Convert all notification providers (pushbullet.py, pushover.py, ntfy.py, email_notify.py) to use httpx.AsyncClient for HTTP operations. Replace requests library calls with async httpx equivalents. Implement async context managers for HTTP client lifecycle to enable connection pooling. Add async retry mechanisms for notification delivery failures. Maintain existing notification formatting and user preference logic. Use 'async with httpx.AsyncClient() as client' pattern for proper resource management. Preserve existing error handling and logging for failed notifications.",
+        "testStrategy": "Mock async HTTP responses for notification provider tests. Test async retry logic for failed notifications. Validate notification delivery functionality matches sync behavior. Test multiple notification providers concurrently. Integration tests with real notification services to verify async client compatibility.",
+        "priority": "medium",
+        "dependencies": [
+          1
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Update Utility Functions for Async Compatibility",
+        "description": "Convert utility functions in utils.py to async patterns where beneficial, focusing on file I/O and network operations",
+        "details": "Evaluate utility functions for async conversion benefits. Convert file I/O operations to aiofiles where beneficial, using 'async with aiofiles.open()' patterns. Replace any remaining time.sleep() calls with asyncio.sleep(). Implement async versions of network-related utilities if present. Add contextlib.aclosing usage to prevent resource warnings with async generators. Maintain existing utility function signatures for backward compatibility. Keep cache operations (diskcache) synchronous as the library is inherently sync-focused.",
+        "testStrategy": "Unit tests for async utility functions. Performance comparison between sync and async file operations. Test async file operations with concurrent access patterns. Validate no resource warnings from async generators or context managers.",
+        "priority": "low",
+        "dependencies": [
+          1
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Implement Async Test Infrastructure",
+        "description": "Convert existing test suite to async patterns using pytest-asyncio while maintaining identical test coverage and assertions",
+        "details": "Install and configure pytest-asyncio>=0.21.0 for async test execution. Convert test functions to use @pytest.mark.asyncio decorator. Update conftest.py fixtures to provide async context managers for browser, AI client, and notification mocks. Convert Playwright tests from sync to async API using pytest-playwright-asyncio plugin. Update mock patterns for async HTTP clients and OpenAI responses. Maintain identical test assertions and coverage requirements. Create async versions of existing test utilities and helpers.",
+        "testStrategy": "Run full async test suite and verify 100% pass rate. Compare test coverage metrics to sync version. Performance testing to ensure async tests don't significantly slow down test execution. Validate async fixtures properly handle setup/teardown lifecycle.",
+        "priority": "high",
+        "dependencies": [
+          3,
+          4,
+          5
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Validate Configuration and Cache System Compatibility",
+        "description": "Ensure existing TOML configuration loading and diskcache operations remain compatible with async event loop execution",
+        "details": "Validate TOML configuration loading works correctly within async context. Test config file watching and reloading functionality with async event loop. Ensure diskcache operations (inherently synchronous) integrate properly with async code without blocking. Verify existing region.py and user.py data models work correctly in async context. Test configuration validation and error handling patterns. Maintain existing configuration structure and format compatibility.",
+        "testStrategy": "Integration tests for config reloading during async operation. Test diskcache performance impact within async context. Validate configuration file parsing and validation works identically. Test error handling for invalid configuration files in async environment.",
+        "priority": "medium",
+        "dependencies": [
+          2
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Performance and Memory Optimization Validation",
+        "description": "Validate that async conversion maintains or improves performance characteristics while keeping memory usage reasonable",
+        "details": "Benchmark async version against sync version for identical workloads. Monitor memory usage patterns to ensure no significant increases. Validate that browser lifecycle management doesn't leak resources in async context. Test long-running monitoring sessions for memory stability. Profile async event loop overhead and task management efficiency. Ensure concurrent operations (if any) don't overwhelm system resources. Document any performance characteristics changes.",
+        "testStrategy": "Performance benchmarking suite comparing sync vs async execution times. Memory profiling during extended monitoring sessions. Load testing with multiple concurrent search operations. Resource leak detection for browser and HTTP client lifecycle management.",
+        "priority": "medium",
+        "dependencies": [
+          7
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "Documentation and Migration Guide Creation",
+        "description": "Create comprehensive documentation for async patterns used throughout the codebase and provide migration guidance for future developers",
+        "details": "Document async/await patterns used throughout the codebase. Create migration guide explaining sync-to-async conversion decisions. Document async context manager patterns for browser and HTTP client lifecycle. Provide examples of proper async error handling and retry mechanisms. Document testing patterns with pytest-asyncio and async fixtures. Include performance characteristics and resource management guidelines. Create troubleshooting guide for common async pitfalls and solutions.",
+        "testStrategy": "Documentation review to ensure accuracy and completeness. Code examples in documentation must be tested and working. Migration guide validation through step-by-step implementation testing. Developer feedback collection on documentation clarity and usefulness.",
+        "priority": "low",
+        "dependencies": [
+          9
+        ],
+        "status": "pending",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-07-28T20:58:49.088Z",
+      "updated": "2025-07-28T20:58:49.088Z",
+      "description": "Tasks for master context"
+    }
+  }
+}
