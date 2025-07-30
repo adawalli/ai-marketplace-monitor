@@ -279,6 +279,7 @@ def test_config(config_file: Callable, config_content: str, acceptable: bool) ->
         "market_type": (str, type(None)),
         "min_price": (str, type(None)),
         "model": (str, type(None)),
+        "monitor_config": dict,
         "name": (str, type(None)),
         "notify": (list, type(None)),
         "password": (str, type(None)),
