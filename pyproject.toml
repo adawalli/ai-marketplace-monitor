@@ -93,6 +93,16 @@ show_missing = true
 [tool.coverage.html]
 directory = "htmlcov"
 
+[tool.pytest.ini_options]
+filterwarnings = [
+    # Suppress AsyncMock coroutine warnings in Telegram notification tests
+    # These warnings occur when testing sync methods that wrap async operations with asyncio.run()
+    # The coroutines are properly handled by asyncio.run() but pytest's garbage collection
+    # triggers warnings for the mock coroutines that were never directly awaited
+    "ignore::RuntimeWarning:_pytest.unraisableexception",
+    "ignore:coroutine.*was never awaited:RuntimeWarning",
+]
+
 [tool.ruff]
 target-version = "py39"
 output-format = "full"
