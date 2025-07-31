@@ -315,7 +315,12 @@ class TelegramNotificationConfig(PushNotificationConfig):
         """Send message using asyncio.run to call async Telegram operations."""
         import asyncio
 
-        return asyncio.run(self._send_message_async(title, message, logger))
+        try:
+            return asyncio.run(self._send_message_async(title, message, logger))
+        except Exception as e:
+            if logger:
+                logger.error(f"Telegram notification failed: {e}")
+            raise
 
     async def _send_message_async(
         self: "TelegramNotificationConfig",
