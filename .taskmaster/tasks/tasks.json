@@ -68,8 +68,54 @@
         "dependencies": [
           1
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Define TelegramNotificationConfig class extending PushNotificationConfig",
+            "description": "Create the TelegramNotificationConfig class in notification.py that inherits from PushNotificationConfig.",
+            "dependencies": [],
+            "details": "Implement the class definition following Python OOP conventions. Use the class keyword and ensure proper inheritance from PushNotificationConfig. Follow the pattern of existing PushbulletNotificationConfig and PushoverNotificationConfig classes for structure and style.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Add Telegram-specific fields and required_fields attribute",
+            "description": "Add telegram_token and telegram_chat_id fields as strings to TelegramNotificationConfig and set required_fields accordingly.",
+            "dependencies": [],
+            "details": "Define telegram_token and telegram_chat_id as string attributes. Set the class attribute required_fields to ['telegram_token', 'telegram_chat_id'] to enforce mandatory configuration.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement validation handlers for telegram_token and telegram_chat_id",
+            "description": "Create handle_telegram_token() and handle_telegram_chat_id() methods to validate the formats of the Telegram bot token and chat ID.",
+            "dependencies": [],
+            "details": "handle_telegram_token() should verify the token starts with numbers followed by a colon. handle_telegram_chat_id() should validate that the chat ID is either a numeric string or a valid username. Follow validation patterns used in PushbulletNotificationConfig and PushoverNotificationConfig.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Implement synchronous send_message method using asyncio.run()",
+            "description": "Add a send_message(title, message, logger) method that synchronously calls an async message sending method using asyncio.run().",
+            "dependencies": [],
+            "details": "Implement send_message to call a private async method _send_message_async() via asyncio.run(). Handle exceptions by logging errors and wrapping them in notification exceptions. Ensure method signature matches the base class exactly.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Implement private async _send_message_async method using telegram.Bot",
+            "description": "Create the _send_message_async(title, message, logger) method that sends messages using telegram.Bot with proper formatting and error handling.",
+            "dependencies": [],
+            "details": "Instantiate telegram.Bot with telegram_token. Use bot.send_message with chat_id=telegram_chat_id, formatted message text with MarkdownV2 escaping, and parse_mode='MarkdownV2'. Handle telegram.error.TelegramError exceptions and log errors appropriately.",
+            "status": "done",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 3,
@@ -204,7 +250,7 @@
     ],
     "metadata": {
       "created": "2025-07-31T21:47:31.681Z",
-      "updated": "2025-07-31T22:00:05.172Z",
+      "updated": "2025-07-31T22:08:48.018Z",
       "description": "Tasks for master context"
     }
   }
