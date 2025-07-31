@@ -337,6 +337,17 @@ class TelegramNotificationConfig(PushNotificationConfig):
                 logger.error("python-telegram-bot library is required for Telegram notifications")
             return False
 
+        # Check for required Telegram configuration
+        if self.telegram_token is None:
+            if logger:
+                logger.error("telegram_token is required but not configured")
+            return False
+
+        if self.telegram_chat_id is None:
+            if logger:
+                logger.error("telegram_chat_id is required but not configured")
+            return False
+
         try:
             bot = telegram.Bot(token=self.telegram_token)
 
