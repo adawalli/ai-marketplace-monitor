@@ -10,7 +10,7 @@ from .ai import AIResponse  # type: ignore
 from .email_notify import EmailNotificationConfig
 from .listing import Listing
 from .marketplace import TItemConfig
-from .notification import NotificationConfig, NotificationStatus
+from .notification import NotificationConfig, NotificationStatus, TelegramNotificationConfig
 from .ntfy import NtfyNotificationConfig
 from .pushbullet import PushbulletNotificationConfig
 from .pushover import PushoverNotificationConfig
@@ -23,6 +23,7 @@ class UserConfig(
     PushbulletNotificationConfig,
     PushoverNotificationConfig,
     NtfyNotificationConfig,
+    TelegramNotificationConfig,
 ):
     """UserConfiguration
 

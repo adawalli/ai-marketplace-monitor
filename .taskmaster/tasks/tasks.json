@@ -267,8 +267,29 @@
         "dependencies": [
           4
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Integrate telegram.helpers.escape_markdown for user content",
+            "description": "Import and apply telegram.helpers.escape_markdown with version=2 to escape all user-generated content including listing titles, descriptions, and messages before sending. Ensure escaping covers all MarkdownV2 special characters and that title formatting (bold) is applied after escaping.",
+            "dependencies": [],
+            "details": "Modify the message formatting logic in _send_message_async to use escape_markdown(text, version=2) on all user content. Confirm that the final message format is '*{escaped_title}*\\n\\n{escaped_message}'. Verify that all special characters (_ * [ ] ( ) ~ ` > # + - = | { } . !) are properly escaped to prevent Telegram API errors.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Write unit tests covering special characters and edge cases",
+            "description": "Develop comprehensive unit tests to verify correct escaping of all MarkdownV2 special characters and edge cases such as messages containing only special characters or markdown-like syntax. Ensure tests confirm that escaped messages do not cause Telegram API errors.",
+            "dependencies": [
+              "5.1"
+            ],
+            "details": "Create test cases with titles and messages containing various special characters, combinations, and edge cases. Use mocks to simulate sending messages and verify that escape_markdown is applied correctly and that the formatted message matches expected escaped output. Include tests for empty strings, very long strings, and strings with nested markdown-like patterns.",
+            "status": "done",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 6,
@@ -280,8 +301,41 @@
         "dependencies": [
           2
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Modify User model and config loading to include Telegram fields",
+            "description": "Update config.py to add telegram_token and telegram_chat_id fields to the User model configuration loading. Extend load_user_config() to parse these new Telegram fields from the user config file.",
+            "dependencies": [],
+            "details": "Follow the existing pattern used for other notification tokens like pushbullet_token and pushover_token. Ensure the User model can hold telegram_token and telegram_chat_id attributes and that these are correctly loaded from the TOML config.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Instantiate TelegramNotificationConfig when Telegram config is present",
+            "description": "Modify the configuration loading logic to instantiate a TelegramNotificationConfig object when telegram_token is present in the user config. Add this instance to the notification_configs list if valid.",
+            "dependencies": [
+              "6.1"
+            ],
+            "details": "Use the TelegramNotificationConfig class implemented in Task 2. Ensure that the instantiation and validation follow the existing pattern for other notification configs. Only create the instance if telegram_token and telegram_chat_id are both present and valid.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Unit test config parsing and validation for Telegram fields",
+            "description": "Write unit tests to verify that the user config loading correctly parses telegram_token and telegram_chat_id fields. Test that TelegramNotificationConfig is instantiated properly when config is valid and that validation errors are raised for invalid Telegram config.",
+            "dependencies": [
+              "6.1",
+              "6.2"
+            ],
+            "details": "Include tests for presence and absence of Telegram fields in the config. Validate that invalid token formats and chat IDs trigger appropriate validation errors. Follow the test strategy used for other notification configs.",
+            "status": "done",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 7,
@@ -364,7 +418,7 @@
     ],
     "metadata": {
       "created": "2025-07-31T21:47:31.681Z",
-      "updated": "2025-07-31T23:12:29.807Z",
+      "updated": "2025-07-31T23:47:37.332Z",
       "description": "Tasks for master context"
     }
   }
