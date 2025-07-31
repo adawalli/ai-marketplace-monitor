@@ -114,75 +114,89 @@ The AI Marketplace Monitor is currently a synchronous Python application that mo
 
 # Development Roadmap
 
-## Phase 0: Analysis & Preparation
+## Phase 0: Technical Spike & Foundation
 
-**Scope**: Technical validation and planning (1-2 days)
+**Scope**: Validate critical async patterns and establish test infrastructure
 
-- Map sync-to-async API conversions for Playwright and OpenAI
-- Verify library version compatibility for async APIs
-- Create simple async proof-of-concept for browser lifecycle
-- Test existing schedule patterns can be replicated with asyncio
-- **Deliverable**: Technical validation that async migration is straightforward
+### Critical Technical Validations
+- **CLI + AsyncIO Integration**: Verify Typer CLI works properly with `asyncio.run()` wrapper
+- **Browser Lifecycle Proof**: Create minimal async browser context manager that preserves current sharing patterns
+- **Cache Operation Analysis**: Test `diskcache` blocking behavior in async context, determine if acceptable or needs async wrapper
+- **Schedule Migration**: Prototype asyncio task scheduling to replicate current interval-based patterns
+- **Config Reload Integration**: Verify file watching (`watchdog`) works with async event loop
 
-## Phase 1: Foundation & Core Loop (MVP)
+### Async Test Infrastructure Setup
+- Add `pytest-asyncio` and configure for async test execution
+- Create async versions of core fixtures (`async_browser`, `async_monitor`)
+- Establish pattern for running sync and async tests in parallel during migration
+- **Critical**: Async tests must be working before any implementation conversion
 
-**Scope**: Establish minimal async foundation while preserving existing behavior
+### Simple Success Validation
+- Existing functionality works identically with async foundation
+- No performance degradation from sync version
+- Browser automation behaves identically (same pages scraped, same data extracted)
+- All external integrations function unchanged (AI, notifications, config)
 
-- Convert CLI entry point to use `asyncio.run()` wrapper around existing logic
-- Migrate `MarketplaceMonitor` main loop to async (keeping sequential execution initially)
-- Replace `time.sleep()` calls with `asyncio.sleep()`
-- Update basic utility functions to async where needed
-- **Deliverable**: Same functional behavior but running in async event loop
-- **Test**: All existing tests pass with async foundation
+## Phase 1: Async Foundation with Sequential Execution
 
-## Phase 2: Web Scraping Migration (Most Critical)
+**Scope**: Minimal async wrapper while preserving exact sequential behavior
 
-**Scope**: Convert Playwright operations to async API
+- Convert CLI entry point to use `asyncio.run()` wrapper
+- Convert `MarketplaceMonitor` main loop to async (keeping exact sequential execution)
+- Replace `time.sleep()` with `asyncio.sleep()`
+- Update utility functions to async versions
+- **Key Constraint**: No concurrent operations - pure sequential async conversion
+- **Validation**: Async tests pass, behavior identical to sync version
 
-- Migrate Facebook Marketplace implementation to async Playwright API
-- Convert page navigation and element interactions to async
-- Update browser/page lifecycle management to async context managers
-- Preserve existing scraping logic and error handling patterns
-- **Deliverable**: Async web scraping with identical scraping behavior
-- **Test**: Browser tests pass with async Playwright
+## Phase 2: Browser Operations Migration
 
-## Phase 3: AI & HTTP Client Migration
+**Scope**: Convert Playwright to async API while preserving exact scraping behavior
 
-**Scope**: Convert API calls to async implementations
+- Migrate from `playwright.sync_api` to `playwright.async_api`
+- Convert browser/page lifecycle to async context managers
+- Update all page interactions to async patterns
+- Preserve identical scraping logic, error handling, and retry patterns
+- **Key Constraint**: Same pages scraped, same data extracted, same error handling
+- **Validation**: Browser automation tests pass with async Playwright
 
-- Migrate OpenAI integration to async client
+## Phase 3: External API Migration
+
+**Scope**: Convert HTTP clients to async while preserving behavior
+
+- Migrate OpenAI client to async version
 - Convert notification HTTP requests to async
-- Update retry logic and error handling for async patterns
-- Keep cache operations synchronous (diskcache is inherently sync)
-- **Deliverable**: All external API calls use async HTTP clients
-- **Test**: AI evaluation and notifications work identically
+- Update retry and error handling for async patterns
+- Address cache operations: keep sync or add async wrapper based on Phase 0 analysis
+- **Key Constraint**: Same API calls, same responses, same error handling
+- **Validation**: AI evaluation and notification tests pass
 
-## Phase 4: Testing & Validation
+## Phase 4: Integration Validation
 
-**Scope**: Ensure comprehensive async test coverage
+**Scope**: End-to-end validation of complete async system
 
-- Add `pytest-asyncio` for async test execution
-- Convert existing tests to async patterns incrementally
-- Validate keyboard interrupt handling works with async event loop
+- Run full test suite in async mode
+- Validate keyboard interrupt handling with async event loop
 - Verify config reloading works with async main loop
-- **Deliverable**: Full async test suite with same coverage as sync version
+- Test complete monitoring cycles (startup → search → AI → notify → repeat)
+- **Final Validation**: System behaves identically to sync version with async foundation
 
 # Logical Dependency Chain
 
-## Conservative Foundation Approach
+## KISS Principle: Async Migration Strategy
 
-1. **Async Event Loop Setup** - Minimal change to wrap existing logic in asyncio.run()
-2. **Sequential Async Conversion** - Convert one component at a time while preserving behavior
-3. **Testing at Each Step** - Validate functionality matches sync version before proceeding
-4. **No Concurrency Initially** - Focus on async conversion first, concurrency later if needed
+**Core Philosophy**: Convert to async patterns while changing as little behavior as possible
 
-## Simplicity-First Migration Strategy
+1. **Phase 0**: Validate critical patterns work - tests must come first
+2. **Phase 1**: Minimal async wrapper - just event loop, no behavior changes
+3. **Phase 2**: Browser async conversion - most critical for library compatibility
+4. **Phase 3**: API client conversion - complete async foundation
+5. **Phase 4**: Integration validation - confirm identical behavior
 
-1. **Phase 1**: Async wrapper - minimal change to establish async foundation
-2. **Phase 2**: Web scraping - most critical async conversion for Playwright compatibility
-3. **Phase 3**: API clients - convert HTTP calls to async for library compatibility
-4. **Phase 4**: Testing validation - ensure no regressions introduced
-5. **Phase 5**: Documentation - record patterns for future maintainers
+**Key Constraints Throughout**:
+- **No Concurrency**: Pure sequential async conversion only
+- **Identical Behavior**: Same inputs produce same outputs
+- **Test-First**: Async tests working before implementation changes
+- **Rollback Ready**: Each phase can revert to previous working state
 
 ## Risk Mitigation Through Simplicity
 
@@ -195,28 +209,35 @@ The AI Marketplace Monitor is currently a synchronous Python application that mo
 
 ## Technical Challenges
 
-### Risk: Browser Lifecycle Management Complexity
+### Critical Risk: CLI + AsyncIO Integration
 
-- **Issue**: Current browser sharing and context management needs careful async conversion
-- **Mitigation**: Phase 0 proof-of-concept to validate browser lifecycle patterns
-- **Rollback**: Keep sync fallback until async browser management is validated
+- **Issue**: Typer CLI framework integration with `asyncio.run()` wrapper has unknown interactions
+- **Mitigation**: Phase 0 validation with simple CLI + async proof-of-concept
+- **Rollback**: Revert to sync version if CLI integration issues discovered
 
-### Risk: Schedule Library Replacement
+### Critical Risk: Browser Context Management in Async
 
-- **Issue**: Current `schedule` library patterns need asyncio equivalents
-- **Mitigation**: Phase 0 validation that asyncio can replicate existing scheduling
-- **Alternative**: Keep schedule library and wrap with async if needed
+- **Issue**: Current browser sharing patterns may not work with async context managers
+- **Mitigation**: Phase 0 creates minimal async browser lifecycle proof that preserves sharing
+- **Rollback**: Keep sync browser management if async version introduces instability
 
-### Risk: Keyboard Interrupt & Config Reload
+### Critical Risk: Cache Operations Blocking Async Event Loop
 
-- **Issue**: Interactive features and file watching may conflict with async event loop
-- **Mitigation**: Test these patterns early in Phase 1
-- **Conservative**: Maintain existing behavior rather than optimize
+- **Issue**: `diskcache` synchronous operations may block async event loop significantly
+- **Mitigation**: Phase 0 tests cache operation blocking time and determines acceptable threshold
+- **Alternative**: Add async wrapper for cache operations if blocking is problematic
 
-### Risk: Test Migration Breaking Coverage
+### Risk: Schedule Library Migration Complexity
 
-- **Mitigation**: Convert tests incrementally alongside implementation phases
-- **Validation**: Each phase includes test validation as deliverable
+- **Issue**: Current `schedule` library has sophisticated interval management
+- **Mitigation**: Phase 0 prototypes asyncio task scheduling for current patterns
+- **Alternative**: Keep `schedule` library with async wrapper if direct migration too complex
+
+### Risk: File Watching + Async Event Loop Conflicts
+
+- **Issue**: Configuration file watching (`watchdog`) integration with asyncio unknown
+- **Mitigation**: Phase 0 tests config reload with async event loop
+- **Fallback**: Disable automatic config reload if conflicts discovered
 
 ## MVP Scope Definition (Simplified)
 
@@ -228,13 +249,13 @@ The AI Marketplace Monitor is currently a synchronous Python application that mo
 - Preserved sequential execution behavior
 - Same error handling and logging patterns
 
-### Success Criteria (Conservative)
+### Success Criteria (Simple & Measurable)
 
-- Zero functional regressions compared to sync version
-- All existing tests pass in async form
-- Clean, readable async/await code patterns
-- No performance degradation from sync version
-- Modern library compatibility achieved (main goal)
+- **Functional Equivalence**: Same CLI behavior, same scraping results, same AI evaluations, same notifications
+- **Test Coverage**: All async tests pass with identical assertions to sync tests
+- **Performance**: No slower than sync version for single-threaded execution
+- **Library Compatibility**: Can use async-first libraries (main goal achieved)
+- **Code Quality**: Async patterns follow established Python async conventions
 
 ## Resource Constraints
 
