@@ -197,3 +197,8 @@ warn_no_return = true
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+test = [
+    "pytest-asyncio>=1.1.0",
+]

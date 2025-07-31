@@ -127,8 +127,65 @@
         "dependencies": [
           2
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Define synchronous send_message method with asyncio.run()",
+            "description": "Implement the synchronous send_message(title, message, logger) method in TelegramNotificationConfig that calls the private async method _send_message_async using asyncio.run().",
+            "dependencies": [],
+            "details": "Create send_message method matching the base class signature exactly. Use try-except to call asyncio.run(self._send_message_async(title, message, logger)) and catch any exceptions. Log errors with logger.error and raise appropriate notification exceptions to wrap asyncio-related errors.",
+            "status": "done",
+            "testStrategy": "Unit tests to verify asyncio.run() is called correctly, exceptions are caught and wrapped, and logger.error is invoked on failure."
+          },
+          {
+            "id": 2,
+            "title": "Implement private async _send_message_async method using telegram.Bot",
+            "description": "Create the private asynchronous method _send_message_async(title, message, logger) that sends messages using telegram.Bot with proper MarkdownV2 formatting.",
+            "dependencies": [
+              "3.1"
+            ],
+            "details": "Instantiate telegram.Bot with the configured token per call. Format the message as '*{title}*\\n\\n{message}' with MarkdownV2 escaping. Use bot.send_message(chat_id=self.telegram_chat_id, text=formatted_message, parse_mode='MarkdownV2'). Handle telegram.error.TelegramError exceptions and log errors appropriately.",
+            "status": "done",
+            "testStrategy": "Unit tests with AsyncMock for telegram.Bot and bot.send_message. Verify correct parameters and exception handling for common Telegram errors."
+          },
+          {
+            "id": 3,
+            "title": "Add safe MarkdownV2 escaping for user content",
+            "description": "Integrate telegram.helpers.escape_markdown to safely escape user-generated content in titles and messages before sending.",
+            "dependencies": [
+              "3.2"
+            ],
+            "details": "Import escape_markdown and apply it to title and message with version=2 before formatting. Ensure escaping covers all special MarkdownV2 characters. Apply bold formatting to escaped title only after escaping. This prevents Telegram API errors due to unescaped characters.",
+            "status": "done",
+            "testStrategy": "Unit tests with various special characters and markdown-like syntax in titles and messages. Verify escaping prevents errors and preserves intended formatting."
+          },
+          {
+            "id": 4,
+            "title": "Implement exception handling and wrapping in send_message",
+            "description": "Enhance send_message to catch asyncio and Telegram-related exceptions from _send_message_async and wrap them in appropriate notification exceptions.",
+            "dependencies": [
+              "3.1",
+              "3.2",
+              "3.3"
+            ],
+            "details": "Within send_message, catch all exceptions from asyncio.run call. Log the error message using logger.error with a clear prefix. Raise custom notification exceptions that encapsulate the original error to provide meaningful error context to callers.",
+            "status": "done",
+            "testStrategy": "Unit tests simulating exceptions thrown by _send_message_async. Verify logger.error is called and exceptions are wrapped and re-raised correctly."
+          },
+          {
+            "id": 5,
+            "title": "Verify method signature compliance and integration",
+            "description": "Ensure the implemented send_message method signature exactly matches the base class definition and integrates correctly within TelegramNotificationConfig.",
+            "dependencies": [
+              "3.1",
+              "3.4"
+            ],
+            "details": "Check that send_message accepts parameters (title, message, logger) with no deviations. Confirm that the method integrates seamlessly with the rest of the notification system and respects expected behavior and error handling patterns.",
+            "status": "done",
+            "testStrategy": "Static code analysis and unit tests verifying method signature. Integration tests to confirm correct operation within the notification framework."
+          }
+        ]
       },
       {
         "id": 4,
@@ -140,8 +197,65 @@
         "dependencies": [
           3
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create bot instance and format message",
+            "description": "Implement logic to create a new telegram.Bot instance per call using the provided telegram_token. Format the message string as '*{title}*\\n\\n{message}' with proper MarkdownV2 escaping.",
+            "dependencies": [],
+            "details": "Use telegram.Bot(token=self.telegram_token) to instantiate the bot. Format the message by escaping special MarkdownV2 characters in title and message, then apply bold formatting to the title as '*{escaped_title}*\\n\\n{escaped_message}'.",
+            "status": "done",
+            "testStrategy": "Unit tests verifying correct bot instantiation and message formatting with various special characters."
+          },
+          {
+            "id": 2,
+            "title": "Implement async _send_message_async method",
+            "description": "Develop the private asynchronous method _send_message_async(title, message, logger) that sends the formatted message using bot.send_message with parse_mode='MarkdownV2'.",
+            "dependencies": [
+              "4.1"
+            ],
+            "details": "Within _send_message_async, create the bot instance, send the message to telegram_chat_id using bot.send_message(chat_id=self.telegram_chat_id, text=formatted_message, parse_mode='MarkdownV2'), and ensure the method is async.",
+            "status": "done",
+            "testStrategy": "Unit tests with AsyncMock to verify bot.send_message is called with correct parameters."
+          },
+          {
+            "id": 3,
+            "title": "Handle telegram.error.TelegramError exceptions",
+            "description": "Add exception handling in _send_message_async to catch telegram.error.TelegramError exceptions and log errors appropriately using the provided logger.",
+            "dependencies": [
+              "4.2"
+            ],
+            "details": "Wrap the send_message call in try-except to catch TelegramError exceptions. Log error details with logger.error to aid debugging and monitoring.",
+            "status": "done",
+            "testStrategy": "Unit tests simulating TelegramError exceptions to verify proper logging and error handling."
+          },
+          {
+            "id": 4,
+            "title": "Ensure bot lifecycle management per call",
+            "description": "Manage the lifecycle of the telegram.Bot instance by creating and disposing it within each call to _send_message_async to avoid persistent state issues.",
+            "dependencies": [
+              "4.3"
+            ],
+            "details": "Create the bot instance inside the method scope and allow it to be garbage collected after the message is sent, ensuring no shared state or resource leaks.",
+            "status": "done",
+            "testStrategy": "Code review and runtime checks to confirm no persistent bot instances remain after method execution."
+          },
+          {
+            "id": 5,
+            "title": "Write unit tests for _send_message_async",
+            "description": "Develop comprehensive unit tests for _send_message_async covering message formatting, bot instantiation, successful message sending, and exception handling.",
+            "dependencies": [
+              "4.1",
+              "4.2",
+              "4.3",
+              "4.4"
+            ],
+            "details": "Use AsyncMock to mock telegram.Bot and its send_message method. Test correct parameters, MarkdownV2 escaping, exception handling for TelegramError, and lifecycle management.",
+            "status": "done",
+            "testStrategy": "Automated unit tests verifying all functional aspects and error scenarios of _send_message_async."
+          }
+        ]
       },
       {
         "id": 5,
@@ -250,7 +364,7 @@
     ],
     "metadata": {
       "created": "2025-07-31T21:47:31.681Z",
-      "updated": "2025-07-31T22:08:48.018Z",
+      "updated": "2025-07-31T23:12:29.807Z",
       "description": "Tasks for master context"
     }
   }
