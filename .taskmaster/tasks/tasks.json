@@ -9,8 +9,54 @@
         "testStrategy": "Verify dependency installation with `uv sync` and confirm import works with `python -c 'import telegram; print(telegram.__version__)'`. Check that version is 20.0 or higher for required features.",
         "priority": "high",
         "dependencies": [],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Add python-telegram-bot dependency to pyproject.toml",
+            "description": "Add the python-telegram-bot library version 20.0 or higher as a dependency in the pyproject.toml file using uv package manager.",
+            "dependencies": [],
+            "details": "Modify pyproject.toml to include `python-telegram-bot>=20.0` under dependencies. Use the command `uv add python-telegram-bot` to install the latest stable version. This ensures the project uses the async Telegram Bot API wrapper with improved asyncio support and MarkdownV2 formatting helpers.",
+            "status": "done",
+            "testStrategy": "Verify installation by running `uv sync` and confirm the package is installed with `python -c 'import telegram; print(telegram.__version__)'`. Ensure the version is 20.0 or higher."
+          },
+          {
+            "id": 2,
+            "title": "Create TelegramNotificationConfig class",
+            "description": "Implement a configuration class TelegramNotificationConfig extending PushNotificationConfig with Telegram-specific fields.",
+            "dependencies": [],
+            "details": "Create TelegramNotificationConfig in notification.py with fields `telegram_token` (str) and `telegram_chat_id` (str). Set `required_fields` to include these fields. Implement validation methods: `handle_telegram_token()` to check token format (numbers followed by colon) and `handle_telegram_chat_id()` to validate chat ID format (numeric string or username). Follow patterns from existing PushbulletNotificationConfig and PushoverNotificationConfig classes.",
+            "status": "done",
+            "testStrategy": "Unit tests to verify field validation, required fields enforcement, and inheritance correctness. Test invalid token and chat ID formats raise validation errors."
+          },
+          {
+            "id": 3,
+            "title": "Implement _send_message_async method using telegram.Bot",
+            "description": "Create a private asynchronous method to send messages using telegram.Bot with proper error handling and MarkdownV2 formatting.",
+            "dependencies": [],
+            "details": "Implement `_send_message_async(title, message, logger)` method that creates a telegram.Bot instance per call using `telegram.Bot(token=self.telegram_token)`. Send messages with `bot.send_message(chat_id=self.telegram_chat_id, text=formatted_message, parse_mode='MarkdownV2')`. Format message as `*{title}*\n\n{message}` with MarkdownV2 escaping. Handle `telegram.error.TelegramError` exceptions and log errors appropriately.",
+            "status": "done",
+            "testStrategy": "Unit tests using AsyncMock for telegram.Bot. Mock `send_message()` to verify correct parameters and parse_mode. Test exception handling for common Telegram errors (401, 400, 403)."
+          },
+          {
+            "id": 4,
+            "title": "Implement safe MarkdownV2 formatting with escape_markdown",
+            "description": "Use telegram.helpers.escape_markdown to safely escape user-generated content before sending messages to Telegram.",
+            "dependencies": [],
+            "details": "Import `telegram.helpers.escape_markdown` and apply it to message titles and bodies to escape special MarkdownV2 characters (_ * [ ] ( ) ~ ` > # + - = | { } . !). Format the final message as `*{escape_markdown(title, version=2)}*\n\n{escape_markdown(message, version=2)}` ensuring the title is bolded after escaping.",
+            "status": "done",
+            "testStrategy": "Unit tests with various special characters in titles and messages. Verify escaping prevents Telegram API errors. Test edge cases including messages with only special characters or markdown-like syntax."
+          },
+          {
+            "id": 5,
+            "title": "Verify dependency installation and import correctness",
+            "description": "Confirm that the python-telegram-bot dependency is correctly installed and can be imported with the required version.",
+            "dependencies": [],
+            "details": "Run `uv sync` to synchronize dependencies. Execute `python -c 'import telegram; print(telegram.__version__)'` to verify the package is importable and the version is 20.0 or higher, ensuring compatibility with async features and MarkdownV2 helpers.",
+            "status": "done",
+            "testStrategy": "Automated or manual verification of import success and version check. Fail the task if import fails or version is below 20.0."
+          }
+        ]
       },
       {
         "id": 2,
@@ -158,7 +204,7 @@
     ],
     "metadata": {
       "created": "2025-07-31T21:47:31.681Z",
-      "updated": "2025-07-31T21:47:31.681Z",
+      "updated": "2025-07-31T22:00:05.172Z",
       "description": "Tasks for master context"
     }
   }
