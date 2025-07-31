@@ -1,0 +1,165 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Add python-telegram-bot dependency",
+        "description": "Add the python-telegram-bot library as a project dependency using uv",
+        "details": "Add `python-telegram-bot>=20.0` to pyproject.toml dependencies. Use `uv add python-telegram-bot` to install the latest stable version. This library provides async Telegram Bot API wrapper with automatic API updates and comprehensive error handling. Version 20+ includes improved asyncio support and MarkdownV2 formatting helpers required for safe message formatting.",
+        "testStrategy": "Verify dependency installation with `uv sync` and confirm import works with `python -c 'import telegram; print(telegram.__version__)'`. Check that version is 20.0 or higher for required features.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Create TelegramNotificationConfig class",
+        "description": "Implement TelegramNotificationConfig extending PushNotificationConfig with Telegram-specific fields",
+        "details": "Create class in notification.py extending PushNotificationConfig. Add fields: telegram_token (str), telegram_chat_id (str). Set required_fields = ['telegram_token', 'telegram_chat_id']. Implement validation handlers: handle_telegram_token() to validate bot token format (should start with numbers followed by colon), handle_telegram_chat_id() to validate chat ID format (numeric string or username). Follow exact pattern of existing PushbulletNotificationConfig and PushoverNotificationConfig classes.",
+        "testStrategy": "Unit tests for field validation, required_fields checking, and proper inheritance from PushNotificationConfig. Test invalid token/chat_id formats raise appropriate validation errors.",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Implement sync send_message wrapper method",
+        "description": "Create synchronous send_message method that uses asyncio.run() to call async Telegram operations",
+        "details": "Implement send_message(title, message, logger) method in TelegramNotificationConfig. Use asyncio.run() pattern to call private _send_message_async() method. Handle any asyncio-related exceptions and wrap them in appropriate notification exceptions. Ensure method signature matches base class exactly. Pattern: `def send_message(self, title, message, logger): try: asyncio.run(self._send_message_async(title, message, logger)) except Exception as e: logger.error(f'Telegram notification failed: {e}'); raise`",
+        "testStrategy": "Unit tests using AsyncMock to mock _send_message_async. Verify asyncio.run() is called correctly and exceptions are properly wrapped. Test with both successful and failing async operations.",
+        "priority": "high",
+        "dependencies": [
+          2
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Implement telegram.Bot direct integration",
+        "description": "Create private async method using telegram.Bot class for simple message sending",
+        "details": "Implement _send_message_async(title, message, logger) method using telegram.Bot(token=self.telegram_token). Use bot.send_message(chat_id=self.telegram_chat_id, text=formatted_message, parse_mode='MarkdownV2'). Create bot instance per call for simple lifecycle management. Handle telegram.error.TelegramError exceptions and log appropriately. Format message as: `*{title}*\\n\\n{message}` with proper MarkdownV2 escaping.",
+        "testStrategy": "Unit tests with AsyncMock for telegram.Bot. Mock bot.send_message() and verify correct parameters (chat_id, text, parse_mode). Test exception handling for common Telegram errors (401, 400, 403).",
+        "priority": "high",
+        "dependencies": [
+          3
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Implement safe MarkdownV2 formatting",
+        "description": "Add telegram.helpers.escape_markdown for safe user content formatting",
+        "details": "Import telegram.helpers.escape_markdown and use it to escape user-generated content before sending. MarkdownV2 requires escaping: _ * [ ] ( ) ~ ` > # + - = | { } . ! characters. Apply escaping to listing titles, descriptions, and any user data. Format final message as: `*{escape_markdown(title, version=2)}*\\n\\n{escape_markdown(message, version=2)}`. Ensure title formatting (*bold*) is applied after escaping.",
+        "testStrategy": "Unit tests with various special characters in titles and messages. Verify proper escaping prevents Telegram API errors. Test edge cases like messages containing only special characters or markdown-like syntax.",
+        "priority": "medium",
+        "dependencies": [
+          4
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Add Telegram config to User model",
+        "description": "Extend user configuration loading to support Telegram notification settings",
+        "details": "Modify config.py to include telegram_token and telegram_chat_id in User model configuration loading. Add these fields to user configuration parsing in load_user_config(). Ensure TelegramNotificationConfig is instantiated when telegram_token is present in user config. Follow existing pattern used for pushbullet_token, pushover_token, etc. Add to notification_configs list when valid Telegram config is found.",
+        "testStrategy": "Unit tests for config loading with telegram fields present and absent. Verify TelegramNotificationConfig is created correctly from TOML config. Test validation errors for invalid telegram configurations.",
+        "priority": "medium",
+        "dependencies": [
+          2
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Implement message splitting for 4096 character limit",
+        "description": "Handle Telegram's message length limit by splitting long messages",
+        "details": "Implement message splitting logic in _send_message_async() to handle Telegram's 4096 character limit. Split at word boundaries when possible, preserving MarkdownV2 formatting. Send multiple messages if content exceeds limit. Add continuation indicators like '(1/3)', '(2/3)' for multi-part messages. Ensure title formatting is preserved in first message only. Handle edge cases where single words exceed limit.",
+        "testStrategy": "Unit tests with messages of various lengths (under limit, slightly over, significantly over). Verify splitting preserves formatting and sends multiple messages in sequence. Test edge cases with very long words or URLs.",
+        "priority": "medium",
+        "dependencies": [
+          5
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Implement Telegram rate limiting and 429 handling",
+        "description": "Add rate limiting support with proper handling of Telegram API rate limits",
+        "details": "Implement rate limiting in _send_message_async(): 1 message/second per chat, 20/minute for groups, 30/second global limit. Handle HTTP 429 'Too Many Requests' responses by reading Retry-After header and waiting appropriately. Use asyncio.sleep() for backoff delays. Add retry logic with exponential backoff for rate limit errors. Track message timestamps to avoid hitting limits proactively.",
+        "testStrategy": "Unit tests mocking 429 responses with various Retry-After values. Verify proper sleep delays and retry behavior. Test rate limiting logic with different chat types and message frequencies.",
+        "priority": "medium",
+        "dependencies": [
+          7
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Enhance error handling and logging",
+        "description": "Add comprehensive error handling for Telegram-specific failures",
+        "details": "Enhance _send_message_async() with specific error handling for common Telegram errors: 401 Unauthorized (invalid token), 400 Bad Request (invalid chat_id), 403 Forbidden (bot blocked), 404 Not Found (chat not found). Add detailed logging with actionable error messages. Map telegram.error exceptions to appropriate NotificationError types. Include troubleshooting hints in error messages (e.g., 'Check bot token from @BotFather').",
+        "testStrategy": "Unit tests for each error type with appropriate exception mocking. Verify error messages contain helpful troubleshooting information. Test error mapping to existing notification error hierarchy.",
+        "priority": "medium",
+        "dependencies": [
+          8
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "Add comprehensive unit tests with AsyncMock",
+        "description": "Create full test coverage for Telegram notification functionality using AsyncMock",
+        "details": "Create test_telegram_notification.py following existing test patterns. Use AsyncMock from unittest.mock for async function testing. Test scenarios: successful message sending, various error conditions, message splitting, rate limiting, configuration validation. Mock telegram.Bot and all async operations. Ensure 100% code coverage for TelegramNotificationConfig class. Follow existing test patterns from test_pushbullet_notification.py.",
+        "testStrategy": "Run tests with `uv run invoke tests` and verify 100% coverage for Telegram notification code. Use pytest-asyncio is not required since we're testing sync interfaces that internally use asyncio.run(). Validate all edge cases and error conditions are covered.",
+        "priority": "medium",
+        "dependencies": [
+          9
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 11,
+        "title": "Create user setup documentation",
+        "description": "Write comprehensive user guide for Telegram bot setup and configuration",
+        "details": "Create documentation in README.md or separate guide covering: 1) Creating bot via @BotFather on Telegram, 2) Obtaining bot token, 3) Finding chat ID using @userinfobot or API calls, 4) Adding telegram_token and telegram_chat_id to user config, 5) Testing configuration. Include troubleshooting section for common errors (401, 403, 400). Add configuration examples and screenshots if helpful.",
+        "testStrategy": "Manual validation by following setup steps with test Telegram account. Verify documentation accuracy and completeness. Test configuration examples in actual config files.",
+        "priority": "low",
+        "dependencies": [
+          10
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 12,
+        "title": "Integration testing and validation",
+        "description": "Perform end-to-end testing of Telegram notifications in full application context",
+        "details": "Test complete integration: configure test Telegram bot, add to user config, run marketplace monitor with Telegram notifications enabled. Verify notifications are sent for matching listings, error handling works correctly, and existing notification systems remain unaffected. Test with various listing types and message lengths. Validate asyncio.run() pattern doesn't interfere with other application components.",
+        "testStrategy": "Manual testing with live Telegram bot and test marketplace listings. Verify all notification features work end-to-end. Run full test suite to ensure no regressions in existing functionality. Test performance impact of asyncio.run() overhead.",
+        "priority": "low",
+        "dependencies": [
+          11
+        ],
+        "status": "pending",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-07-31T21:47:31.681Z",
+      "updated": "2025-07-31T21:47:31.681Z",
+      "description": "Tasks for master context"
+    }
+  }
+}
