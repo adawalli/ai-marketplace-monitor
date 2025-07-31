@@ -14,7 +14,7 @@ repos:
       - id: check-merge-conflict
       - id: pretty-format-json
         args: [--autofix, "--no-sort-keys"]
-        exclude: .ipynb
+        exclude: (.ipynb|.taskmaster/.*\.json)
       - id: end-of-file-fixer
       - id: trailing-whitespace
         exclude: .bumpversion.cfg

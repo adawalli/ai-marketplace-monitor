@@ -37,6 +37,7 @@ dependencies = [
   "tomli==2.2.1; python_version < '3.11'",
   "safety>=3.5.2",
   "pip-audit>=2.9.0",
+  "python-telegram-bot>=22.3",
 ]
 
 [project.urls]

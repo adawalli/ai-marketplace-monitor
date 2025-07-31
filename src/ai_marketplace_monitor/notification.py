@@ -246,3 +246,107 @@ class PushNotificationConfig(NotificationConfig):
             if not self.send_message_with_retry(title, message, logger=logger):
                 return False
         return True
+
+
+@dataclass
+class TelegramNotificationConfig(PushNotificationConfig):
+    notify_method = "telegram"
+    required_fields: ClassVar[List[str]] = ["telegram_token", "telegram_chat_id"]
+
+    telegram_token: str | None = None
+    telegram_chat_id: str | None = None
+
+    def handle_telegram_token(self: "TelegramNotificationConfig") -> None:
+        if self.telegram_token is None:
+            return
+
+        if not isinstance(self.telegram_token, str) or not self.telegram_token:
+            raise ValueError("An non-empty telegram_token is needed.")
+
+        self.telegram_token = self.telegram_token.strip()
+
+        # Validate token format: numbers:letters_and_numbers
+        if ":" not in self.telegram_token:
+            raise ValueError(
+                "telegram_token must contain a colon (:) separating bot ID and secret."
+            )
+
+        bot_id, secret = self.telegram_token.split(":", 1)
+        if not bot_id.isdigit():
+            raise ValueError("telegram_token bot ID (before colon) must be numeric.")
+
+        if not secret or not secret.replace("_", "").replace("-", "").isalnum():
+            raise ValueError(
+                "telegram_token secret (after colon) must contain only alphanumeric characters, underscores, and hyphens."
+            )
+
+    def handle_telegram_chat_id(self: "TelegramNotificationConfig") -> None:
+        if self.telegram_chat_id is None:
+            return
+
+        if not isinstance(self.telegram_chat_id, str) or not self.telegram_chat_id:
+            raise ValueError("An non-empty telegram_chat_id is needed.")
+
+        self.telegram_chat_id = self.telegram_chat_id.strip()
+
+        # Validate chat ID format: numeric (negative for groups) or @username
+        if self.telegram_chat_id.startswith("@"):
+            # Username format
+            username = self.telegram_chat_id[1:]
+            if not username or not username.replace("_", "").isalnum():
+                raise ValueError(
+                    "telegram_chat_id username must contain only alphanumeric characters and underscores."
+                )
+        else:
+            # Numeric format (can be negative for groups)
+            try:
+                int(self.telegram_chat_id)
+            except ValueError as e:
+                raise ValueError(
+                    "telegram_chat_id must be numeric or start with @ for usernames."
+                ) from e
+
+    def send_message(
+        self: "TelegramNotificationConfig",
+        title: str,
+        message: str,
+        logger: Logger | None = None,
+    ) -> bool:
+        """Send message using asyncio.run to call async Telegram operations."""
+        import asyncio
+
+        return asyncio.run(self._send_message_async(title, message, logger))
+
+    async def _send_message_async(
+        self: "TelegramNotificationConfig",
+        title: str,
+        message: str,
+        logger: Logger | None = None,
+    ) -> bool:
+        """Private async method to send messages using telegram.Bot."""
+        try:
+            import telegram
+            from telegram.helpers import escape_markdown
+        except ImportError:
+            if logger:
+                logger.error("python-telegram-bot library is required for Telegram notifications")
+            return False
+
+        try:
+            bot = telegram.Bot(token=self.telegram_token)
+
+            # Format message with MarkdownV2 escaping
+            escaped_title = escape_markdown(title, version=2)
+            escaped_message = escape_markdown(message, version=2)
+            formatted_message = f"*{escaped_title}*\n\n{escaped_message}"
+
+            await bot.send_message(
+                chat_id=self.telegram_chat_id, text=formatted_message, parse_mode="MarkdownV2"
+            )
+
+            return True
+
+        except Exception as e:
+            if logger:
+                logger.error(f"Failed to send Telegram message: {e}")
+            return False
