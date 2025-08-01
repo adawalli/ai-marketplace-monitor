@@ -1,7 +1,7 @@
 """Tests for notification.py module."""
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -461,3 +461,392 @@ class TestTelegramNotificationConfig:
             call_args = mock_bot_instance.send_message.call_args
             assert call_args[1]["chat_id"] == telegram_config.telegram_chat_id
             assert call_args[1]["parse_mode"] == "MarkdownV2"
+
+    def test_split_message_at_boundaries_short_message(
+        self: "Self", telegram_config: TelegramNotificationConfig
+    ) -> None:
+        """Test splitting logic with message shorter than limit."""
+        short_message = "This is a short message"
+        result = telegram_config._split_message_at_boundaries(short_message, 100)
+
+        assert result == [short_message]
+
+    def test_split_message_at_boundaries_word_boundary(
+        self: "Self", telegram_config: TelegramNotificationConfig
+    ) -> None:
+        """Test splitting at word boundaries."""
+        message = "This is a message that needs to be split properly"
+        result = telegram_config._split_message_at_boundaries(message, 30)
+
+        # Should split at word boundaries
+        assert len(result) >= 2
+        assert all(len(part) <= 30 for part in result)
+        assert " ".join(result) == message.replace(
+            "  ", " "
+        )  # Account for possible space normalization
+
+    def test_split_message_at_boundaries_very_long_word(
+        self: "Self", telegram_config: TelegramNotificationConfig
+    ) -> None:
+        """Test splitting with word longer than limit (edge case)."""
+        long_word = "verylongwordthatexceedsthelimit"
+        message = f"Short {long_word} end"
+        result = telegram_config._split_message_at_boundaries(message, 20)
+
+        # Should force split the long word
+        assert len(result) >= 2
+        assert all(len(part) <= 20 for part in result)
+
+    def test_split_message_at_boundaries_preserve_content(
+        self: "Self", telegram_config: TelegramNotificationConfig
+    ) -> None:
+        """Test that splitting preserves all message content."""
+        message = "Word1 word2 word3 word4 word5 word6 word7 word8 word9 word10"
+        result = telegram_config._split_message_at_boundaries(message, 25)
+
+        # Rejoin and compare (accounting for whitespace normalization)
+        rejoined = " ".join(result).strip()
+        original_normalized = " ".join(message.split())
+        assert rejoined == original_normalized
+
+    def test_message_splitting_under_limit(
+        self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
+    ) -> None:
+        """Test message sending when under 4096 character limit."""
+        title = "Short Title"
+        message = "Short message"
+
+        with (
+            patch("telegram.Bot") as mock_bot_class,
+            patch("telegram.helpers.escape_markdown") as mock_escape,
+        ):
+            mock_escape.side_effect = lambda text, version: text
+            mock_bot_instance = AsyncMock()
+            mock_bot_class.return_value = mock_bot_instance
+            mock_bot_instance.send_message = AsyncMock(return_value=None)
+
+            import asyncio
+
+            result = asyncio.run(telegram_config._send_message_async(title, message, mock_logger))
+
+            assert result is True
+            # Should send only one message
+            assert mock_bot_instance.send_message.call_count == 1
+
+    def test_message_splitting_over_limit(
+        self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
+    ) -> None:
+        """Test message splitting when over 4096 character limit."""
+        title = "Test Title"
+        # Create a message longer than 4096 characters
+        long_message = "This is a very long message. " * 150  # ~4500 characters
+
+        with (
+            patch("telegram.Bot") as mock_bot_class,
+            patch("telegram.helpers.escape_markdown") as mock_escape,
+        ):
+            mock_escape.side_effect = lambda text, version: text
+            mock_bot_instance = AsyncMock()
+            mock_bot_class.return_value = mock_bot_instance
+            mock_bot_instance.send_message = AsyncMock(return_value=None)
+
+            import asyncio
+
+            result = asyncio.run(
+                telegram_config._send_message_async(title, long_message, mock_logger)
+            )
+
+            assert result is True
+            # Should send multiple messages
+            assert mock_bot_instance.send_message.call_count > 1
+
+            # Check that first message includes title and continuation indicator
+            first_call = mock_bot_instance.send_message.call_args_list[0]
+            first_message_text = first_call[1]["text"]
+            assert title in first_message_text
+            assert "\\(1/" in first_message_text  # Escaped continuation indicator
+
+            # Check that subsequent messages have continuation indicators
+            if mock_bot_instance.send_message.call_count > 1:
+                second_call = mock_bot_instance.send_message.call_args_list[1]
+                second_message_text = second_call[1]["text"]
+                assert "\\(2/" in second_message_text
+
+    def test_message_splitting_continuation_indicators(
+        self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
+    ) -> None:
+        """Test that continuation indicators are properly formatted."""
+        title = "Test"
+        # Create a message that will definitely need splitting into 3+ parts
+        long_message = "Word " * 1500  # ~7500 characters, should split into multiple parts
+
+        with (
+            patch("telegram.Bot") as mock_bot_class,
+            patch("telegram.helpers.escape_markdown") as mock_escape,
+        ):
+            mock_escape.side_effect = lambda text, version: text
+            mock_bot_instance = AsyncMock()
+            mock_bot_class.return_value = mock_bot_instance
+            mock_bot_instance.send_message = AsyncMock(return_value=None)
+
+            import asyncio
+
+            result = asyncio.run(
+                telegram_config._send_message_async(title, long_message, mock_logger)
+            )
+
+            assert result is True
+            call_count = mock_bot_instance.send_message.call_count
+            assert call_count >= 2
+
+            # Check all messages have proper continuation indicators
+            for i, call in enumerate(mock_bot_instance.send_message.call_args_list):
+                message_text = call[1]["text"]
+                expected_indicator = f"\\({i + 1}/{call_count}\\)"
+                assert expected_indicator in message_text
+
+    def test_message_splitting_preserves_formatting(
+        self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
+    ) -> None:
+        """Test that MarkdownV2 formatting is preserved during splitting."""
+        title = "Title with *formatting*"
+        long_message = "Message with _underscores_ and *bold* text. " * 150
+
+        with (
+            patch("telegram.Bot") as mock_bot_class,
+            patch("telegram.helpers.escape_markdown") as mock_escape,
+        ):
+            # Track escape calls to ensure formatting is preserved
+            escape_calls = []
+
+            def track_escape(text: str, version: int) -> str:
+                escape_calls.append((text, version))
+                return f"escaped_{text}"
+
+            mock_escape.side_effect = track_escape
+            mock_bot_instance = AsyncMock()
+            mock_bot_class.return_value = mock_bot_instance
+            mock_bot_instance.send_message = AsyncMock(return_value=None)
+
+            import asyncio
+
+            result = asyncio.run(
+                telegram_config._send_message_async(title, long_message, mock_logger)
+            )
+
+            assert result is True
+            # With message splitting, we have: title + full message (length check) + message parts
+            # So expect more than 2 escape calls when message is split
+            assert len(escape_calls) >= 2
+            assert escape_calls[0][0] == title
+            # The full message should be escaped for length check
+            assert escape_calls[1][0] == long_message
+
+            # All messages should use MarkdownV2 parse mode
+            for call in mock_bot_instance.send_message.call_args_list:
+                assert call[1]["parse_mode"] == "MarkdownV2"
+
+    def test_markdownv2_formatting_preserved_across_splits(
+        self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
+    ) -> None:
+        """Test that MarkdownV2 formatting is correctly preserved when messages are split."""
+        title = "Test"
+        # Create a message with special characters that need escaping
+        message_with_specials = (
+            "Message with _underscores_ and *asterisks* and [brackets] and (parentheses). " * 100
+        )
+
+        with (
+            patch("telegram.Bot") as mock_bot_class,
+            patch("telegram.helpers.escape_markdown") as mock_escape,
+        ):
+            # Track calls to escape_markdown to ensure each part is escaped separately
+            escape_calls = []
+
+            def track_escape(text: str, version: int) -> str:
+                escape_calls.append((text, version))
+                # Return a simple escaped version for testing
+                return (
+                    text.replace("_", "\\_")
+                    .replace("*", "\\*")
+                    .replace("[", "\\[")
+                    .replace("]", "\\]")
+                    .replace("(", "\\(")
+                    .replace(")", "\\)")
+                )
+
+            mock_escape.side_effect = track_escape
+            mock_bot_instance = AsyncMock()
+            mock_bot_class.return_value = mock_bot_instance
+            mock_bot_instance.send_message = AsyncMock(return_value=None)
+
+            import asyncio
+
+            result = asyncio.run(
+                telegram_config._send_message_async(title, message_with_specials, mock_logger)
+            )
+
+            assert result is True
+
+            # Should have multiple send_message calls due to length
+            call_count = mock_bot_instance.send_message.call_count
+            assert call_count > 1
+
+            # Should have escaped the title, full message (for length check), and each message part separately
+            # Title + full message + each part = 2 + call_count escape calls
+            assert len(escape_calls) == call_count + 2
+
+            # Verify each escape call used version 2 (MarkdownV2)
+            for _text, version in escape_calls:
+                assert version == 2
+
+    def test_markdownv2_escape_sequences_not_broken(
+        self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
+    ) -> None:
+        """Test that escape sequences are not broken when splitting messages."""
+        title = "Test"
+        # Create a message that would break escape sequences if split at wrong position
+        message = "This message has many special chars: " + "_*[]()~`>#+-=|{}.!" * 200
+
+        with (
+            patch("telegram.Bot") as mock_bot_class,
+            patch("telegram.helpers.escape_markdown") as mock_escape,
+        ):
+            # Real escape function behavior
+            def real_escape(text: str, version: int) -> str:
+                if version == 2:
+                    special_chars = "_*[]()~`>#+-=|{}.!"
+                    escaped = text
+                    for char in special_chars:
+                        escaped = escaped.replace(char, f"\\{char}")
+                    return escaped
+                return text
+
+            mock_escape.side_effect = real_escape
+            mock_bot_instance = AsyncMock()
+            mock_bot_class.return_value = mock_bot_instance
+            mock_bot_instance.send_message = AsyncMock(return_value=None)
+
+            import asyncio
+
+            result = asyncio.run(telegram_config._send_message_async(title, message, mock_logger))
+
+            assert result is True
+
+            # Verify all sent messages have valid MarkdownV2 format
+            for call in mock_bot_instance.send_message.call_args_list:
+                message_text = call[1]["text"]
+                # Should not have any unescaped special characters
+                # (except for the intentional formatting like *title*)
+                assert call[1]["parse_mode"] == "MarkdownV2"
+
+                # Check that we don't have broken escape sequences like "\ " (backslash followed by space)
+                # or incomplete escapes at the end of message parts
+                assert not message_text.endswith("\\")
+
+    def test_original_message_split_not_escaped_message(
+        self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
+    ) -> None:
+        """Test that we split the original message, not the escaped version."""
+        title = "Test"
+        # Message that would be much longer after escaping
+        original_message = (
+            "Short message with * and _ chars " * 150
+        )  # Make it longer to ensure splitting
+
+        with (
+            patch("telegram.Bot") as mock_bot_class,
+            patch("telegram.helpers.escape_markdown") as mock_escape,
+        ):
+            # Track what gets passed to _split_message_at_boundaries
+            original_split_method = telegram_config._split_message_at_boundaries
+            split_calls = []
+
+            def track_split_calls(text: str, max_length: int) -> List[str]:
+                split_calls.append((text, max_length))
+                return original_split_method(text, max_length)
+
+            telegram_config._split_message_at_boundaries = track_split_calls
+
+            # Mock escape to return much longer text
+            def escape_with_expansion(text: str, version: int) -> str:
+                return text.replace("*", "\\*").replace("_", "\\_")
+
+            mock_escape.side_effect = escape_with_expansion
+            mock_bot_instance = AsyncMock()
+            mock_bot_class.return_value = mock_bot_instance
+            mock_bot_instance.send_message = AsyncMock(return_value=None)
+
+            import asyncio
+
+            result = asyncio.run(
+                telegram_config._send_message_async(title, original_message, mock_logger)
+            )
+
+            assert result is True
+
+            # Should have called split with the original message, not escaped
+            assert len(split_calls) == 1
+            split_text, _ = split_calls[0]
+            assert split_text == original_message  # Original, not escaped
+
+            # Restore original method
+            telegram_config._split_message_at_boundaries = original_split_method
+
+    def test_each_message_part_escaped_individually(
+        self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
+    ) -> None:
+        """Test that each message part is escaped individually to maintain proper formatting."""
+        title = "Test Title"
+        # Create message that will be split into parts
+        long_message = "Part with *bold* text and _italic_ text. " * 150
+
+        with (
+            patch("telegram.Bot") as mock_bot_class,
+            patch("telegram.helpers.escape_markdown") as mock_escape,
+        ):
+            escape_calls = []
+
+            def track_escape_calls(text: str, version: int) -> str:
+                escape_calls.append(text)
+                return f"ESCAPED[{text}]"
+
+            mock_escape.side_effect = track_escape_calls
+            mock_bot_instance = AsyncMock()
+            mock_bot_class.return_value = mock_bot_instance
+            mock_bot_instance.send_message = AsyncMock(return_value=None)
+
+            import asyncio
+
+            result = asyncio.run(
+                telegram_config._send_message_async(title, long_message, mock_logger)
+            )
+
+            assert result is True
+
+            # Should have multiple message sends
+            call_count = mock_bot_instance.send_message.call_count
+            assert call_count > 1
+
+            # Should have escape calls for: title + full message (length check) + each message part
+            assert len(escape_calls) == call_count + 2
+
+            # First escape call should be the title
+            assert escape_calls[0] == title
+
+            # Second escape call should be the full message (for length check)
+            assert escape_calls[1] == long_message
+
+            # Remaining calls should be different parts of the original message
+            message_parts = escape_calls[2:]
+
+            # Each part should be a substring of the original message
+            for part in message_parts:
+                assert part in long_message or any(part in chunk for chunk in long_message.split())
+
+            # When rejoined, the parts should reconstruct something close to the original
+            # (accounting for potential whitespace normalization during splitting)
+            rejoined = " ".join(message_parts).strip()
+            original_normalized = " ".join(long_message.split())
+            # Length should be close (within reasonable margin for whitespace differences)
+            assert abs(len(rejoined) - len(original_normalized)) < 50

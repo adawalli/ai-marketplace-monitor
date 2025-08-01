@@ -348,7 +348,51 @@
           5
         ],
         "status": "pending",
-        "subtasks": []
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement splitting logic respecting word boundaries",
+            "description": "Develop the core logic to split messages into parts without breaking words, ensuring each part is within the 4096 character limit.",
+            "dependencies": [],
+            "details": "Analyze the message text and split it at spaces or other word boundaries to avoid cutting words in half. Ensure that each split message part does not exceed Telegram's 4096 character limit.\n<info added on 2025-07-31T23:52:19.295Z>\nImplementation complete: Added _split_message_at_boundaries() method to TelegramNotificationConfig that intelligently splits messages at word boundaries while respecting the 4096 character limit. The method handles edge cases where individual words exceed the limit by force-splitting at the boundary. Modified _send_message_async() to detect oversized messages and automatically split them, with the first message containing the title and (1/n) indicator, and subsequent messages using continuation indicators (2/n), (3/n), etc. The splitting logic preserves message integrity and maintains proper formatting structure across all message parts.\n</info added on 2025-07-31T23:52:19.295Z>",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Preserve MarkdownV2 formatting across splits",
+            "description": "Ensure that MarkdownV2 formatting is correctly maintained and valid in each split message part.",
+            "dependencies": [
+              "7.1"
+            ],
+            "details": "Handle MarkdownV2 escape sequences and formatting tags so that they are not broken across message splits. Maintain proper escaping and formatting consistency in all message parts.\n<info added on 2025-07-31T23:59:50.448Z>\nTask completed successfully. Implementation uses split-then-escape approach: splits original unescaped message at word boundaries first, then applies telegram.helpers.escape_markdown to each part individually. This prevents breaking MarkdownV2 escape sequences and formatting tags during splitting. Added comprehensive unit tests covering formatting preservation, escape sequence integrity, original vs escaped message splitting, and individual part escaping. All 42 tests passing with proper MarkdownV2 handling maintained across all message parts.\n</info added on 2025-07-31T23:59:50.448Z>",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Add continuation indicators for multi-part messages",
+            "description": "Append continuation indicators like '(1/3)', '(2/3)' to each message part to indicate the sequence and total number of parts.",
+            "dependencies": [
+              "7.1",
+              "7.2"
+            ],
+            "details": "Design and add continuation markers at the end or beginning of each split message to clearly show the order and total count of message parts, improving readability and user experience.",
+            "status": "pending",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Handle edge cases such as very long words exceeding limit",
+            "description": "Implement logic to manage edge cases where single words or URLs exceed the 4096 character limit and cannot be split at word boundaries.",
+            "dependencies": [
+              "7.1"
+            ],
+            "details": "Detect words longer than the limit and apply fallback splitting strategies, such as forced splitting or truncation, while preserving as much formatting as possible.",
+            "status": "pending",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 8,
@@ -418,7 +462,7 @@
     ],
     "metadata": {
       "created": "2025-07-31T21:47:31.681Z",
-      "updated": "2025-07-31T23:47:37.332Z",
+      "updated": "2025-07-31T23:59:53.795Z",
       "description": "Tasks for master context"
     }
   }

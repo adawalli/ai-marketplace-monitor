@@ -322,6 +322,38 @@ class TelegramNotificationConfig(PushNotificationConfig):
                 logger.error(f"Telegram notification failed: {e}")
             raise
 
+    def _split_message_at_boundaries(
+        self: "TelegramNotificationConfig", text: str, max_length: int
+    ) -> List[str]:
+        """Split message at word boundaries while respecting character limit."""
+        if len(text) <= max_length:
+            return [text]
+
+        parts = []
+        remaining = text
+
+        while remaining:
+            if len(remaining) <= max_length:
+                parts.append(remaining)
+                break
+
+            # Find the last space within the limit
+            split_pos = max_length
+            while split_pos > 0 and remaining[split_pos] != " ":
+                split_pos -= 1
+
+            # If no space found, we have a word longer than max_length
+            if split_pos == 0:
+                # Force split at max_length - handle edge case of very long words
+                split_pos = max_length
+
+            # Extract the part and remove it from remaining
+            part = remaining[:split_pos].rstrip()
+            parts.append(part)
+            remaining = remaining[split_pos:].lstrip()
+
+        return parts
+
     async def _send_message_async(
         self: "TelegramNotificationConfig",
         title: str,
@@ -356,9 +388,46 @@ class TelegramNotificationConfig(PushNotificationConfig):
             escaped_message = escape_markdown(message, version=2)
             formatted_message = f"*{escaped_title}*\n\n{escaped_message}"
 
-            await bot.send_message(
-                chat_id=self.telegram_chat_id, text=formatted_message, parse_mode="MarkdownV2"
-            )
+            # Telegram message length limit is 4096 characters
+            max_message_length = 4096
+
+            # Check if message needs splitting
+            if len(formatted_message) <= max_message_length:
+                await bot.send_message(
+                    chat_id=self.telegram_chat_id, text=formatted_message, parse_mode="MarkdownV2"
+                )
+            else:
+                # Split the ORIGINAL unescaped message to preserve MarkdownV2 formatting
+                # Reserve space for title formatting and continuation indicators
+                title_with_formatting = f"*{escaped_title}*\n\n"
+                continuation_space = 15  # Space for " \(1/999\)" indicator
+                available_for_message = (
+                    max_message_length - len(title_with_formatting) - continuation_space
+                )
+
+                # Split the original message (before escaping) to avoid breaking escape sequences
+                message_parts = self._split_message_at_boundaries(message, available_for_message)
+                total_parts = len(message_parts)
+
+                # Send first message with title
+                escaped_first_part = escape_markdown(message_parts[0], version=2)
+                first_message = f"{title_with_formatting}{escaped_first_part}"
+                if total_parts > 1:
+                    first_message += f" \\(1/{total_parts}\\)"
+
+                await bot.send_message(
+                    chat_id=self.telegram_chat_id, text=first_message, parse_mode="MarkdownV2"
+                )
+
+                # Send remaining parts without title
+                for i, part in enumerate(message_parts[1:], 2):
+                    escaped_part = escape_markdown(part, version=2)
+                    continuation_message = f"{escaped_part} \\({i}/{total_parts}\\)"
+                    await bot.send_message(
+                        chat_id=self.telegram_chat_id,
+                        text=continuation_message,
+                        parse_mode="MarkdownV2",
+                    )
 
             return True
 
