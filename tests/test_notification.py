@@ -850,3 +850,40 @@ class TestTelegramNotificationConfig:
             original_normalized = " ".join(long_message.split())
             # Length should be close (within reasonable margin for whitespace differences)
             assert abs(len(rejoined) - len(original_normalized)) < 50
+
+    def test_split_message_extreme_edge_cases(
+        self: "Self", telegram_config: TelegramNotificationConfig
+    ) -> None:
+        """Test extreme edge cases: very long URLs and single words exceeding limits."""
+        # Test with extremely long URL (common in marketplace listings)
+        extremely_long_url = "https://example.com/" + "a" * 5000 + ".html"
+        message_with_long_url = f"Check this listing: {extremely_long_url} - great deal!"
+
+        result = telegram_config._split_message_at_boundaries(message_with_long_url, 4096)
+
+        # Should handle the long URL by force-splitting
+        assert len(result) >= 2
+        assert all(len(part) <= 4096 for part in result)
+
+        # Test with multiple extremely long words
+        long_words = ["word" + "a" * 5000 + str(i) for i in range(3)]
+        message_with_long_words = " ".join(long_words)
+
+        result2 = telegram_config._split_message_at_boundaries(message_with_long_words, 4096)
+
+        # Should handle multiple long words
+        assert len(result2) >= 3  # At least one part per long word
+        assert all(len(part) <= 4096 for part in result2)
+
+        # Test edge case: single character repeated beyond limit
+        single_char_repeated = "a" * 10000
+        result3 = telegram_config._split_message_at_boundaries(single_char_repeated, 4096)
+
+        # Should split into multiple 4096-character chunks
+        expected_parts = (10000 + 4095) // 4096  # Ceiling division
+        assert len(result3) == expected_parts
+        assert all(len(part) <= 4096 for part in result3)
+
+        # Verify content preservation by rejoining
+        rejoined = "".join(result3)
+        assert rejoined == single_char_repeated
