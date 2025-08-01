@@ -256,6 +256,9 @@ class TelegramNotificationConfig(PushNotificationConfig):
     telegram_token: str | None = None
     telegram_chat_id: str | None = None
 
+    # Instance-level rate limiting
+    _last_send_time: float | None = None
+
     def handle_telegram_token(self: "TelegramNotificationConfig") -> None:
         if self.telegram_token is None:
             return
@@ -354,6 +357,52 @@ class TelegramNotificationConfig(PushNotificationConfig):
 
         return parts
 
+    def _is_group_chat(self: "TelegramNotificationConfig") -> bool:
+        """Determine if the chat_id represents a group chat (negative ID or supergroup)."""
+        if self.telegram_chat_id is None:
+            return False
+
+        # Group chats have negative IDs, individual chats have positive IDs
+        # Usernames (@username) are treated as individual chats for rate limiting
+        if self.telegram_chat_id.startswith("@"):
+            return False
+
+        try:
+            chat_id_int = int(self.telegram_chat_id)
+            return chat_id_int < 0
+        except ValueError:
+            # If we can't parse as int, default to individual chat
+            return False
+
+    def _get_wait_time(self: "TelegramNotificationConfig") -> float:
+        """Calculate wait time needed before next send."""
+        if self._last_send_time is None:
+            return 0.0
+
+        elapsed = time.time() - self._last_send_time
+        # Use different intervals: 1.1s for individual chats, 3.0s for groups
+        min_interval = 3.0 if self._is_group_chat() else 1.1
+        return max(0.0, min_interval - elapsed)
+
+    async def _wait_for_rate_limit(
+        self: "TelegramNotificationConfig", logger: Logger | None = None
+    ) -> None:
+        """Wait if rate limiting is needed, then record send time."""
+        wait_time = self._get_wait_time()
+        if wait_time > 0:
+            if logger:
+                chat_type = "group" if self._is_group_chat() else "individual"
+                logger.debug(
+                    f"Rate limiting {chat_type} chat {self.telegram_chat_id}: waiting {wait_time:.1f} seconds"
+                )
+
+            import asyncio
+
+            await asyncio.sleep(wait_time)
+
+        # Record the send time
+        self._last_send_time = time.time()
+
     async def _send_message_async(
         self: "TelegramNotificationConfig",
         title: str,
@@ -379,6 +428,9 @@ class TelegramNotificationConfig(PushNotificationConfig):
             if logger:
                 logger.error("telegram_chat_id is required but not configured")
             return False
+
+        # Wait for rate limits before sending
+        await self._wait_for_rate_limit(logger)
 
         try:
             bot = telegram.Bot(token=self.telegram_token)
@@ -421,6 +473,9 @@ class TelegramNotificationConfig(PushNotificationConfig):
 
                 # Send remaining parts without title
                 for i, part in enumerate(message_parts[1:], 2):
+                    # Wait for rate limits before sending each additional part
+                    await self._wait_for_rate_limit(logger)
+
                     escaped_part = escape_markdown(part, version=2)
                     continuation_message = f"{escaped_part} \\({i}/{total_parts}\\)"
                     await bot.send_message(

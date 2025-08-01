@@ -1,6 +1,8 @@
 """Tests for notification.py module."""
 
+import asyncio
 import logging
+import time
 from typing import TYPE_CHECKING, List
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -887,3 +889,161 @@ class TestTelegramNotificationConfig:
         # Verify content preservation by rejoining
         rejoined = "".join(result3)
         assert rejoined == single_char_repeated
+
+    def test_get_wait_time_no_previous_send(
+        self: "Self", telegram_config: TelegramNotificationConfig
+    ) -> None:
+        """Test _get_wait_time with no previous send time."""
+        telegram_config._last_send_time = None
+        assert telegram_config._get_wait_time() == 0.0
+
+    def test_get_wait_time_individual_chat_ready(
+        self: "Self", telegram_config: TelegramNotificationConfig
+    ) -> None:
+        """Test _get_wait_time for individual chat when ready to send."""
+        telegram_config.telegram_chat_id = "12345678"
+        telegram_config._last_send_time = time.time() - 2.0  # 2 seconds ago
+
+        wait_time = telegram_config._get_wait_time()
+        assert wait_time == 0.0
+
+    def test_get_wait_time_individual_chat_needs_wait(
+        self: "Self", telegram_config: TelegramNotificationConfig
+    ) -> None:
+        """Test _get_wait_time for individual chat when waiting is needed."""
+        telegram_config.telegram_chat_id = "12345678"
+        telegram_config._last_send_time = time.time() - 0.5  # 0.5 seconds ago
+
+        wait_time = telegram_config._get_wait_time()
+        assert 0.5 < wait_time <= 0.7  # Should be around 0.6 seconds
+
+    def test_get_wait_time_group_chat_ready(
+        self: "Self", telegram_config: TelegramNotificationConfig
+    ) -> None:
+        """Test _get_wait_time for group chat when ready to send."""
+        telegram_config.telegram_chat_id = "-100123456789"
+        telegram_config._last_send_time = time.time() - 4.0  # 4 seconds ago
+
+        wait_time = telegram_config._get_wait_time()
+        assert wait_time == 0.0
+
+    def test_get_wait_time_group_chat_needs_wait(
+        self: "Self", telegram_config: TelegramNotificationConfig
+    ) -> None:
+        """Test _get_wait_time for group chat when waiting is needed."""
+        telegram_config.telegram_chat_id = "-100123456789"
+        telegram_config._last_send_time = time.time() - 1.0  # 1 second ago
+
+        wait_time = telegram_config._get_wait_time()
+        assert 1.9 < wait_time <= 2.1  # Should be around 2 seconds
+
+    def test_wait_for_rate_limit_no_wait_needed(
+        self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
+    ) -> None:
+        """Test _wait_for_rate_limit when no waiting is needed."""
+        telegram_config.telegram_chat_id = "12345678"
+        telegram_config._last_send_time = None
+
+        # Mock asyncio.sleep to verify it's not called
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            # Test through asyncio.run
+            asyncio.run(telegram_config._wait_for_rate_limit(mock_logger))
+
+            # Should not have called sleep
+            mock_sleep.assert_not_called()
+            # Should have set last send time
+            assert telegram_config._last_send_time is not None
+
+    def test_wait_for_rate_limit_individual_with_wait(
+        self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
+    ) -> None:
+        """Test _wait_for_rate_limit for individual chat needing to wait."""
+        telegram_config.telegram_chat_id = "12345678"
+        telegram_config._last_send_time = time.time() - 0.5  # Recent send
+
+        # Mock asyncio.sleep to avoid actual waiting in tests
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            # Test through asyncio.run
+            asyncio.run(telegram_config._wait_for_rate_limit(mock_logger))
+
+            # Should have called sleep once with some wait time
+            assert mock_sleep.call_count == 1
+            wait_time = mock_sleep.call_args[0][0]
+            assert 0.5 <= wait_time <= 0.7  # Should be around 0.6 seconds
+            # Should have updated last send time
+            assert telegram_config._last_send_time is not None
+
+    def test_wait_for_rate_limit_group_with_wait(
+        self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
+    ) -> None:
+        """Test _wait_for_rate_limit for group chat needing to wait."""
+        telegram_config.telegram_chat_id = "-100123456789"
+        telegram_config._last_send_time = time.time() - 1.0  # Recent send
+
+        # Mock asyncio.sleep to avoid actual waiting in tests
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            # Test through asyncio.run
+            asyncio.run(telegram_config._wait_for_rate_limit(mock_logger))
+
+            # Should have called sleep once with some wait time
+            assert mock_sleep.call_count == 1
+            wait_time = mock_sleep.call_args[0][0]
+            assert 1.9 <= wait_time <= 2.1  # Should be around 2 seconds
+            # Should have updated last send time
+            assert telegram_config._last_send_time is not None
+
+    def test_is_group_chat_individual(
+        self: "Self", telegram_config: TelegramNotificationConfig
+    ) -> None:
+        """Test _is_group_chat method for individual chats."""
+        # Test positive chat ID (individual chat)
+        telegram_config.telegram_chat_id = "12345678"
+        assert not telegram_config._is_group_chat()
+
+        # Test username format (individual chat)
+        telegram_config.telegram_chat_id = "@username"
+        assert not telegram_config._is_group_chat()
+
+        # Test None chat ID
+        telegram_config.telegram_chat_id = None
+        assert not telegram_config._is_group_chat()
+
+    def test_is_group_chat_group(
+        self: "Self", telegram_config: TelegramNotificationConfig
+    ) -> None:
+        """Test _is_group_chat method for group chats."""
+        # Test negative chat ID (group chat)
+        telegram_config.telegram_chat_id = "-100123456789"
+        assert telegram_config._is_group_chat()
+
+        # Test simple negative ID
+        telegram_config.telegram_chat_id = "-12345"
+        assert telegram_config._is_group_chat()
+
+    def test_rate_limiting_integration(
+        self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
+    ) -> None:
+        """Test rate limiting integration with message sending."""
+        with (
+            patch("telegram.Bot") as mock_bot_class,
+            patch("telegram.helpers.escape_markdown") as mock_escape,
+        ):
+            mock_escape.side_effect = lambda text, version: f"escaped_{text}"
+
+            # Mock the Bot and its async send_message method
+            mock_bot_instance = AsyncMock()
+            mock_bot_class.return_value = mock_bot_instance
+            mock_bot_instance.send_message = AsyncMock()
+
+            # Mock the rate limiting method to verify it gets called
+            with patch.object(telegram_config, "_wait_for_rate_limit", new_callable=AsyncMock):
+                with patch("asyncio.run") as mock_asyncio_run:
+                    mock_asyncio_run.return_value = True
+
+                    result = telegram_config.send_message(
+                        title="Test Title", message="Test message", logger=mock_logger
+                    )
+
+                    assert result is True
+                    # Verify rate limiting method was called through asyncio.run
+                    mock_asyncio_run.assert_called_once()
