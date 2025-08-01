@@ -1047,3 +1047,208 @@ class TestTelegramNotificationConfig:
                     assert result is True
                     # Verify rate limiting method was called through asyncio.run
                     mock_asyncio_run.assert_called_once()
+
+    def test_get_global_wait_time_empty_queue(
+        self: "Self", telegram_config: TelegramNotificationConfig
+    ) -> None:
+        """Test _get_global_wait_time with empty global send times."""
+        # Clear the global queue
+        TelegramNotificationConfig._global_send_times.clear()
+
+        wait_time = TelegramNotificationConfig._get_global_wait_time()
+        assert wait_time == 0.0
+
+    def test_get_global_wait_time_under_limit(
+        self: "Self", telegram_config: TelegramNotificationConfig
+    ) -> None:
+        """Test _get_global_wait_time when under rate limit."""
+        # Clear the global queue and add some timestamps
+        TelegramNotificationConfig._global_send_times.clear()
+        current_time = time.time()
+
+        # Add 20 messages (under the 30 msg/sec limit)
+        for i in range(20):
+            TelegramNotificationConfig._global_send_times.append(current_time - 0.5 + i * 0.01)
+
+        wait_time = TelegramNotificationConfig._get_global_wait_time()
+        assert wait_time == 0.0
+
+    def test_get_global_wait_time_at_limit(
+        self: "Self", telegram_config: TelegramNotificationConfig
+    ) -> None:
+        """Test _get_global_wait_time when at rate limit."""
+        # Clear the global queue and add messages at the limit
+        TelegramNotificationConfig._global_send_times.clear()
+        current_time = time.time()
+
+        # Add exactly 30 messages in the last second (at limit)
+        for i in range(30):
+            TelegramNotificationConfig._global_send_times.append(current_time - 0.9 + i * 0.03)
+
+        wait_time = TelegramNotificationConfig._get_global_wait_time()
+        # Should need to wait until the oldest message is > 1 second old
+        assert 0.0 < wait_time <= 0.2
+
+    def test_get_global_wait_time_old_messages_cleaned(
+        self: "Self", telegram_config: TelegramNotificationConfig
+    ) -> None:
+        """Test that old messages are cleaned from global queue."""
+        # Clear the global queue
+        TelegramNotificationConfig._global_send_times.clear()
+        current_time = time.time()
+
+        # Add old messages (> 1 second ago) and recent messages
+        for i in range(20):
+            TelegramNotificationConfig._global_send_times.append(
+                current_time - 2.0 + i * 0.01
+            )  # Old
+        for i in range(10):
+            TelegramNotificationConfig._global_send_times.append(
+                current_time - 0.5 + i * 0.01
+            )  # Recent
+
+        wait_time = TelegramNotificationConfig._get_global_wait_time()
+
+        # Should have cleaned old messages and be under limit
+        assert wait_time == 0.0
+        # Queue should only contain recent messages (10)
+        assert len(TelegramNotificationConfig._global_send_times) == 10
+
+    def test_record_global_send_time(
+        self: "Self", telegram_config: TelegramNotificationConfig
+    ) -> None:
+        """Test _record_global_send_time adds timestamp to queue."""
+        # Clear the global queue
+        TelegramNotificationConfig._global_send_times.clear()
+        initial_count = len(TelegramNotificationConfig._global_send_times)
+
+        TelegramNotificationConfig._record_global_send_time()
+
+        # Should have added one timestamp
+        assert len(TelegramNotificationConfig._global_send_times) == initial_count + 1
+        # Most recent timestamp should be very close to now
+        assert abs(TelegramNotificationConfig._global_send_times[-1] - time.time()) < 0.1
+
+    def test_global_rate_limiting_integrated_with_per_chat(
+        self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
+    ) -> None:
+        """Test that global and per-chat rate limiting work together."""
+        # Clear global queue
+        TelegramNotificationConfig._global_send_times.clear()
+
+        # Set up scenario where per-chat doesn't need wait but global does
+        current_time = time.time()
+        telegram_config._last_send_time = current_time - 2.0  # Per-chat ready (no wait)
+
+        # Fill global queue to capacity requiring wait
+        for i in range(30):
+            TelegramNotificationConfig._global_send_times.append(current_time - 0.9 + i * 0.03)
+
+        # Mock asyncio.sleep to capture wait time
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            asyncio.run(telegram_config._wait_for_rate_limit(mock_logger))
+
+            # Should have called sleep once
+            assert mock_sleep.call_count == 1
+            wait_time = mock_sleep.call_args[0][0]
+
+            # Should be waiting for global rate limit (small wait time)
+            assert 0.05 < wait_time < 0.3
+
+    def test_global_rate_limiting_multiple_instances(
+        self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
+    ) -> None:
+        """Test that global rate limiting works across multiple TelegramNotificationConfig instances."""
+        # Clear global queue
+        TelegramNotificationConfig._global_send_times.clear()
+
+        # Create second instance to verify global state is shared
+        TelegramNotificationConfig(
+            name="test_telegram_2",
+            telegram_token="123456789:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
+            telegram_chat_id="87654321",
+        )
+
+        # Fill global queue through first instance
+        current_time = time.time()
+        for i in range(30):
+            TelegramNotificationConfig._global_send_times.append(current_time - 0.9 + i * 0.03)
+
+        # Both instances should see similar global wait times (allowing for tiny timing differences)
+        wait_time_1 = TelegramNotificationConfig._get_global_wait_time()
+        wait_time_2 = TelegramNotificationConfig._get_global_wait_time()
+
+        assert abs(wait_time_1 - wait_time_2) < 0.01  # Should be very close
+        assert wait_time_1 > 0  # Should require waiting
+        assert wait_time_2 > 0  # Should require waiting
+
+    def test_wait_for_rate_limit_global_dominates(
+        self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
+    ) -> None:
+        """Test _wait_for_rate_limit when global rate limit requires longer wait than per-chat."""
+        # Clear global queue
+        TelegramNotificationConfig._global_send_times.clear()
+
+        # Set up per-chat rate limiting (individual chat, no wait needed)
+        telegram_config.telegram_chat_id = "12345678"
+        telegram_config._last_send_time = time.time() - 2.0  # No per-chat wait needed
+
+        # Set up global rate limiting (at capacity, wait needed)
+        current_time = time.time()
+        for i in range(30):
+            TelegramNotificationConfig._global_send_times.append(current_time - 0.8 + i * 0.025)
+
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            asyncio.run(telegram_config._wait_for_rate_limit(mock_logger))
+
+            # Should have called sleep for global rate limiting
+            assert mock_sleep.call_count == 1
+            wait_time = mock_sleep.call_args[0][0]
+            assert wait_time > 0
+
+            # Should have logged global rate limiting message
+            mock_logger.debug.assert_called_once()
+            log_message = mock_logger.debug.call_args[0][0]
+            assert "Global rate limiting" in log_message
+            assert "30 msg/sec" in log_message
+
+    def test_wait_for_rate_limit_per_chat_dominates(
+        self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
+    ) -> None:
+        """Test _wait_for_rate_limit when per-chat rate limit requires longer wait than global."""
+        # Clear global queue (no global wait needed)
+        TelegramNotificationConfig._global_send_times.clear()
+
+        # Set up per-chat rate limiting (group chat, wait needed)
+        telegram_config.telegram_chat_id = "-100123456789"
+        telegram_config._last_send_time = time.time() - 1.0  # Group needs ~2s wait
+
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            asyncio.run(telegram_config._wait_for_rate_limit(mock_logger))
+
+            # Should have called sleep for per-chat rate limiting
+            assert mock_sleep.call_count == 1
+            wait_time = mock_sleep.call_args[0][0]
+            assert 1.9 < wait_time < 2.1  # Should be around 2 seconds
+
+            # Should have logged per-chat rate limiting message
+            mock_logger.debug.assert_called_once()
+            log_message = mock_logger.debug.call_args[0][0]
+            assert "Rate limiting group chat" in log_message
+
+    def test_wait_for_rate_limit_records_global_send_time(
+        self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
+    ) -> None:
+        """Test that _wait_for_rate_limit records global send time."""
+        # Clear global queue
+        TelegramNotificationConfig._global_send_times.clear()
+        initial_count = len(TelegramNotificationConfig._global_send_times)
+
+        # Set up no waiting needed
+        telegram_config._last_send_time = None
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            asyncio.run(telegram_config._wait_for_rate_limit(mock_logger))
+
+            # Should have recorded global send time
+            assert len(TelegramNotificationConfig._global_send_times) == initial_count + 1
