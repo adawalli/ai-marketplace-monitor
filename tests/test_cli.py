@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 import ai_marketplace_monitor
 from ai_marketplace_monitor import cli
 from ai_marketplace_monitor.config import Config
+from ai_marketplace_monitor.telegram import TelegramNotificationConfig
 
 runner = CliRunner()
 
@@ -433,6 +434,7 @@ def test_telegram_config_auto_creation(config_file: Callable) -> None:
     assert telegram_config_name in config.notification
 
     telegram_config = config.notification[telegram_config_name]
+    assert isinstance(telegram_config, TelegramNotificationConfig)
     assert telegram_config.telegram_token == "123456789:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
     assert telegram_config.telegram_chat_id == "12345678"
     assert telegram_config.name == telegram_config_name
@@ -448,6 +450,7 @@ def test_telegram_config_with_username_chat_id(config_file: Callable) -> None:
     assert telegram_config_name in config.notification
 
     telegram_config = config.notification[telegram_config_name]
+    assert isinstance(telegram_config, TelegramNotificationConfig)
     assert telegram_config.telegram_chat_id == "@testuser"
 
 
@@ -506,6 +509,7 @@ telegram_chat_id = '87654321'
     assert telegram_config_name in config.notification
 
     telegram_config = config.notification[telegram_config_name]
+    assert isinstance(telegram_config, TelegramNotificationConfig)
     # Should have the explicitly defined values, not the user field values
     assert telegram_config.telegram_token == "987654321:XYZ-ABC1234ghIkl-zyx57W2v1u123ew11"
     assert telegram_config.telegram_chat_id == "87654321"

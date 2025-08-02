@@ -14,8 +14,9 @@ else:
 from .ai import DeepSeekBackend, OllamaBackend, OpenAIBackend, TAIConfig
 from .facebook import FacebookMarketplace
 from .marketplace import TItemConfig, TMarketplaceConfig
-from .notification import NotificationConfig, TelegramNotificationConfig
+from .notification import NotificationConfig
 from .region import RegionConfig
+from .telegram import TelegramNotificationConfig
 from .user import User, UserConfig
 from .utils import MonitorConfig, Translator, hilight, merge_dicts
 

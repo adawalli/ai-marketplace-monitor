@@ -10,10 +10,11 @@ from .ai import AIResponse  # type: ignore
 from .email_notify import EmailNotificationConfig
 from .listing import Listing
 from .marketplace import TItemConfig
-from .notification import NotificationConfig, NotificationStatus, TelegramNotificationConfig
+from .notification import NotificationConfig, NotificationStatus
 from .ntfy import NtfyNotificationConfig
 from .pushbullet import PushbulletNotificationConfig
 from .pushover import PushoverNotificationConfig
+from .telegram import TelegramNotificationConfig
 from .utils import CacheType, CounterItem, cache, convert_to_seconds, counter, hilight
 
 

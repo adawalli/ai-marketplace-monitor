@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ai_marketplace_monitor.notification import TelegramNotificationConfig
+from ai_marketplace_monitor.telegram import TelegramNotificationConfig
 
 if TYPE_CHECKING:
     from typing_extensions import Self
