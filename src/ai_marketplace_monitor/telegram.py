@@ -2,9 +2,12 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from logging import Logger
-from typing import ClassVar, Deque, List, Type
+from typing import TYPE_CHECKING, ClassVar, Deque, List, Type
 
 from .notification import PushNotificationConfig
+
+if TYPE_CHECKING:
+    import telegram
 
 
 @dataclass
@@ -201,6 +204,62 @@ class TelegramNotificationConfig(PushNotificationConfig):
         self._last_send_time = time.time()
         self._record_global_send_time()
 
+    async def _send_single_message_with_retry(
+        self: "TelegramNotificationConfig",
+        bot: "telegram.Bot",
+        chat_id: str,
+        text: str,
+        logger: Logger | None = None,
+        max_retries: int = 3,
+    ) -> bool:
+        """Send a single message with HTTP 429 retry handling."""
+        import asyncio
+
+        import telegram
+
+        for attempt in range(max_retries + 1):
+            try:
+                await bot.send_message(chat_id=chat_id, text=text, parse_mode="MarkdownV2")
+                return True
+            except telegram.error.RetryAfter as e:
+                # Handle HTTP 429 with Retry-After header
+                retry_after = e.retry_after
+                if logger:
+                    logger.warning(
+                        f"Telegram rate limit hit (429), waiting {retry_after} seconds (attempt {attempt + 1}/{max_retries + 1})"
+                    )
+
+                if attempt < max_retries:
+                    await asyncio.sleep(retry_after)
+                    continue
+                else:
+                    if logger:
+                        logger.error(f"Max retries ({max_retries}) reached for 429 errors")
+                    return False
+            except telegram.error.TelegramError as e:
+                # Handle other Telegram errors with exponential backoff
+                if attempt < max_retries:
+                    backoff_time = 2**attempt  # Exponential backoff: 1s, 2s, 4s
+                    if logger:
+                        logger.warning(
+                            f"Telegram error: {e}, retrying in {backoff_time} seconds (attempt {attempt + 1}/{max_retries + 1})"
+                        )
+                    await asyncio.sleep(backoff_time)
+                    continue
+                else:
+                    if logger:
+                        logger.error(
+                            f"Max retries ({max_retries}) reached for Telegram errors: {e}"
+                        )
+                    return False
+            except Exception as e:
+                # Handle unexpected errors
+                if logger:
+                    logger.error(f"Unexpected error sending Telegram message: {e}")
+                return False
+
+        return False
+
     async def _send_message_async(
         self: "TelegramNotificationConfig",
         title: str,
@@ -243,8 +302,8 @@ class TelegramNotificationConfig(PushNotificationConfig):
 
             # Check if message needs splitting
             if len(formatted_message) <= max_message_length:
-                await bot.send_message(
-                    chat_id=self.telegram_chat_id, text=formatted_message, parse_mode="MarkdownV2"
+                return await self._send_single_message_with_retry(
+                    bot, self.telegram_chat_id, formatted_message, logger
                 )
             else:
                 # Split the ORIGINAL unescaped message to preserve MarkdownV2 formatting
@@ -265,9 +324,11 @@ class TelegramNotificationConfig(PushNotificationConfig):
                 if total_parts > 1:
                     first_message += f" \\(1/{total_parts}\\)"
 
-                await bot.send_message(
-                    chat_id=self.telegram_chat_id, text=first_message, parse_mode="MarkdownV2"
+                success = await self._send_single_message_with_retry(
+                    bot, self.telegram_chat_id, first_message, logger
                 )
+                if not success:
+                    return False
 
                 # Send remaining parts without title
                 for i, part in enumerate(message_parts[1:], 2):
@@ -276,11 +337,11 @@ class TelegramNotificationConfig(PushNotificationConfig):
 
                     escaped_part = escape_markdown(part, version=2)
                     continuation_message = f"{escaped_part} \\({i}/{total_parts}\\)"
-                    await bot.send_message(
-                        chat_id=self.telegram_chat_id,
-                        text=continuation_message,
-                        parse_mode="MarkdownV2",
+                    success = await self._send_single_message_with_retry(
+                        bot, self.telegram_chat_id, continuation_message, logger
                     )
+                    if not success:
+                        return False
 
             return True
 

@@ -76,7 +76,8 @@ NotificationConfig (base)
 ├── PushNotificationConfig (push notification base)
 │   ├── PushbulletNotificationConfig
 │   ├── PushoverNotificationConfig
-│   └── NtfyNotificationConfig
+│   ├── NtfyNotificationConfig
+│   └── TelegramNotificationConfig
 └── EmailNotificationConfig
 ```
 
@@ -115,23 +116,62 @@ NotificationConfig (base)
 - **100% coverage requirement** with meaningful tests (not busy work)
 - **Mock-based testing** - No real API calls to external services
 
+### Testing Philosophy: Business Logic Over Implementation Details
+
+**Focus on VALUABLE TESTS** that catch real bugs and test behavior:
+
+✅ **KEEP THESE TEST TYPES:**
+- Configuration validation (required fields, formats, edge cases)
+- Core business logic (rate limiting, calculations, algorithms)
+- Success/failure paths with proper error handling
+- Data transformation and preservation (message splitting, parsing)
+- Edge cases and boundary conditions
+
+❌ **AVOID THESE TEST TYPES (busywork):**
+- Testing how many times internal methods are called
+- Complex mocking of external library internals (telegram Bot, etc.)
+- Integration tests disguised as unit tests
+- Tests that verify implementation details rather than behavior
+- Overly complex async/sync boundary testing
+- Tests requiring extensive setup for minimal value
+
+### Guidelines for Adding New Tests
+1. **Ask: "Would this test catch a real bug?"**
+2. **Ask: "Is this testing behavior or implementation?"**
+3. Keep tests simple, focused, and maintainable
+4. Use realistic test data (proper token formats, valid IDs)
+5. Always mock external dependencies (asyncio.run, APIs, etc.)
+
+### Async Testing Guidelines
+- **NEVER write direct async test functions** (`async def test_...`)
+- **ALWAYS mock asyncio.run()** to prevent event loop conflicts
+- Use sync tests that mock async internals before asyncio.run() call
+- See `tests/test_notification.py` for examples
+
 ### Key Testing Patterns
 ```python
-# Configuration testing
+# Configuration testing - Test validation logic
 def test_config_validation():
-    # Test TOML parsing and validation logic
+    config = NotificationConfig(required_field=None)
+    assert not config._has_required_fields()
 
-# Notification testing
-def test_notification_retry():
-    # Test retry logic and error handling
+# Business logic testing - Test calculations/algorithms
+def test_rate_limit_calculation():
+    config.last_send_time = time.time() - 0.5
+    wait_time = config._get_wait_time()
+    assert 0.4 < wait_time <= 0.6
 
-# Marketplace testing
-def test_listing_extraction():
-    # Test HTML parsing with static fixtures
+# Success/failure paths - Test behavior with mocking
+def test_send_message_success():
+    with patch("asyncio.run", return_value=True):
+        result = config.send_message("title", "message", None)
+        assert result is True
 
-# AI backend testing
-def test_ai_response_parsing():
-    # Test AI response processing with mocked responses
+# Algorithm testing - Test data preservation
+def test_message_splitting():
+    result = config._split_message("long message", 10)
+    rejoined = " ".join(result)
+    assert rejoined == "long message"
 ```
 
 ### Running Tests
@@ -139,6 +179,9 @@ def test_ai_response_parsing():
 - **Test category:** `uv run pytest tests/test_notification.py`
 - **With coverage:** `uv run invoke tests` (includes xdoctest)
 - **Multiple Python versions:** `nox -s tests`
+
+### Test Quality Success Story
+The `tests/test_notification.py` file was refactored from **85+ complex integration tests** down to **20 focused unit tests** while maintaining comprehensive coverage. This demonstrates the value of testing business logic over implementation details.
 
 ## Key Implementation Patterns
 
@@ -180,3 +223,33 @@ def test_ai_response_parsing():
 4. **Implement browser automation** with Playwright
 5. **Add listing extraction logic** with error handling
 6. **Create test fixtures** with static HTML samples
+
+## Async Test Pattern Memories
+
+### AI Marketplace Monitor - Async Test Pattern
+- Project uses asyncio.run() isolation for async notification backends (Telegram, Discord, etc.)
+- NEVER write direct async test functions (async def test_...) - they cause event loop conflicts in full test suite
+- ALWAYS write sync tests that mock async internals BEFORE asyncio.run() call
+- Pattern: Mock the async method with patch.object(), then call asyncio.run() in the test
+- This is documented in docs/telegram_support_prd.md and test_notification.py header
+- Event loop conflicts manifest as tests passing individually but failing in full suite
+- Task 8.3 provides working examples of proper async test patterns
+
+### Test Quality Maintenance
+**Successful Test Cleanup Example (Task 8.3):**
+- **Before:** 85+ complex integration tests with event loop conflicts
+- **After:** 20 focused unit tests covering essential business logic
+- **Result:** 100% pass rate, no event loop conflicts, easier maintenance
+
+**Key Lessons:**
+- Tests should catch bugs, not verify implementation details
+- Simple, focused tests are more valuable than complex integration tests
+- Proper mocking prevents external dependencies from breaking tests
+- Testing philosophy documentation helps maintain focus over time
+
+**Red Flags for Future Test Reviews:**
+- Tests requiring extensive setup for minimal assertions
+- Testing "how many times method X was called"
+- Complex mocking of external library internals
+- Tests that only pass in isolation but fail in full suite
+- Integration tests disguised as unit tests
