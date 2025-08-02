@@ -1,6 +1,5 @@
 """Tests for notification.py module."""
 
-import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, List
@@ -188,7 +187,7 @@ class TestTelegramNotificationConfig:
         assert config._has_required_fields() is False
 
         # Missing chat_id
-        config.telegram_token = "123456789:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"  # noqa: S105
+        config.telegram_token = "123456789:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
         config.telegram_chat_id = None
         assert config._has_required_fields() is False
 
@@ -322,12 +321,8 @@ class TestTelegramNotificationConfig:
             mock_send_message = AsyncMock(return_value=None)
             mock_bot_instance.send_message = mock_send_message
 
-            # Run the async method directly
-            import asyncio
-
-            result = asyncio.run(
-                telegram_config._send_message_async(test_title, test_message, mock_logger)
-            )
+            # Test through sync interface
+            result = telegram_config.send_message(test_title, test_message, mock_logger)
 
             assert result is True
 
@@ -348,8 +343,6 @@ class TestTelegramNotificationConfig:
         self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
     ) -> None:
         """Test async method when telegram import fails."""
-        import asyncio
-
         # Mock the _send_message_async method to directly test the ImportError path
         original_method = telegram_config._send_message_async
 
@@ -370,9 +363,7 @@ class TestTelegramNotificationConfig:
         telegram_config._send_message_async = mock_method_with_import_error
 
         try:
-            result = asyncio.run(
-                telegram_config._send_message_async("Title", "Message", mock_logger)
-            )
+            result = telegram_config.send_message("Title", "Message", mock_logger)
 
             assert result is False
             mock_logger.error.assert_called_with(
@@ -397,11 +388,8 @@ class TestTelegramNotificationConfig:
             mock_bot_class.return_value = mock_bot_instance
             mock_bot_instance.send_message = AsyncMock(side_effect=Exception("API Error"))
 
-            import asyncio
-
-            result = asyncio.run(
-                telegram_config._send_message_async("Title", "Message", mock_logger)
-            )
+            # Test through sync interface
+            result = telegram_config.send_message("Title", "Message", mock_logger)
 
             assert result is False
             mock_logger.error.assert_called_with("Failed to send Telegram message: API Error")
@@ -420,9 +408,8 @@ class TestTelegramNotificationConfig:
             mock_bot_class.return_value = mock_bot_instance
             mock_bot_instance.send_message = AsyncMock(return_value=None)
 
-            import asyncio
-
-            result = asyncio.run(telegram_config._send_message_async("", "", mock_logger))
+            # Test through sync interface
+            result = telegram_config.send_message("", "", mock_logger)
 
             assert result is True
 
@@ -450,11 +437,8 @@ class TestTelegramNotificationConfig:
             mock_bot_class.return_value = mock_bot_instance
             mock_bot_instance.send_message = AsyncMock(return_value=None)
 
-            import asyncio
-
-            result = asyncio.run(
-                telegram_config._send_message_async(long_title, long_message, mock_logger)
-            )
+            # Test through sync interface
+            result = telegram_config.send_message(long_title, long_message, mock_logger)
 
             assert result is True
 
@@ -527,9 +511,8 @@ class TestTelegramNotificationConfig:
             mock_bot_class.return_value = mock_bot_instance
             mock_bot_instance.send_message = AsyncMock(return_value=None)
 
-            import asyncio
-
-            result = asyncio.run(telegram_config._send_message_async(title, message, mock_logger))
+            # Test through sync interface
+            result = telegram_config.send_message(title, message, mock_logger)
 
             assert result is True
             # Should send only one message
@@ -552,11 +535,8 @@ class TestTelegramNotificationConfig:
             mock_bot_class.return_value = mock_bot_instance
             mock_bot_instance.send_message = AsyncMock(return_value=None)
 
-            import asyncio
-
-            result = asyncio.run(
-                telegram_config._send_message_async(title, long_message, mock_logger)
-            )
+            # Test through sync interface
+            result = telegram_config.send_message(title, long_message, mock_logger)
 
             assert result is True
             # Should send multiple messages
@@ -591,11 +571,8 @@ class TestTelegramNotificationConfig:
             mock_bot_class.return_value = mock_bot_instance
             mock_bot_instance.send_message = AsyncMock(return_value=None)
 
-            import asyncio
-
-            result = asyncio.run(
-                telegram_config._send_message_async(title, long_message, mock_logger)
-            )
+            # Test through sync interface
+            result = telegram_config.send_message(title, long_message, mock_logger)
 
             assert result is True
             call_count = mock_bot_instance.send_message.call_count
@@ -630,11 +607,8 @@ class TestTelegramNotificationConfig:
             mock_bot_class.return_value = mock_bot_instance
             mock_bot_instance.send_message = AsyncMock(return_value=None)
 
-            import asyncio
-
-            result = asyncio.run(
-                telegram_config._send_message_async(title, long_message, mock_logger)
-            )
+            # Test through sync interface
+            result = telegram_config.send_message(title, long_message, mock_logger)
 
             assert result is True
             # With message splitting, we have: title + full message (length check) + message parts
@@ -682,11 +656,7 @@ class TestTelegramNotificationConfig:
             mock_bot_class.return_value = mock_bot_instance
             mock_bot_instance.send_message = AsyncMock(return_value=None)
 
-            import asyncio
-
-            result = asyncio.run(
-                telegram_config._send_message_async(title, message_with_specials, mock_logger)
-            )
+            result = telegram_config.send_message(title, message_with_specials, mock_logger)
 
             assert result is True
 
@@ -729,9 +699,7 @@ class TestTelegramNotificationConfig:
             mock_bot_class.return_value = mock_bot_instance
             mock_bot_instance.send_message = AsyncMock(return_value=None)
 
-            import asyncio
-
-            result = asyncio.run(telegram_config._send_message_async(title, message, mock_logger))
+            result = telegram_config.send_message(title, message, mock_logger)
 
             assert result is True
 
@@ -779,11 +747,7 @@ class TestTelegramNotificationConfig:
             mock_bot_class.return_value = mock_bot_instance
             mock_bot_instance.send_message = AsyncMock(return_value=None)
 
-            import asyncio
-
-            result = asyncio.run(
-                telegram_config._send_message_async(title, original_message, mock_logger)
-            )
+            result = telegram_config.send_message(title, original_message, mock_logger)
 
             assert result is True
 
@@ -818,11 +782,7 @@ class TestTelegramNotificationConfig:
             mock_bot_class.return_value = mock_bot_instance
             mock_bot_instance.send_message = AsyncMock(return_value=None)
 
-            import asyncio
-
-            result = asyncio.run(
-                telegram_config._send_message_async(title, long_message, mock_logger)
-            )
+            result = telegram_config.send_message(title, long_message, mock_logger)
 
             assert result is True
 
@@ -937,7 +897,7 @@ class TestTelegramNotificationConfig:
         wait_time = telegram_config._get_wait_time()
         assert 1.9 < wait_time <= 2.1  # Should be around 2 seconds
 
-    def test_wait_for_rate_limit_no_wait_needed(
+    async def test_wait_for_rate_limit_no_wait_needed(
         self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
     ) -> None:
         """Test _wait_for_rate_limit when no waiting is needed."""
@@ -946,15 +906,15 @@ class TestTelegramNotificationConfig:
 
         # Mock asyncio.sleep to verify it's not called
         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-            # Test through asyncio.run
-            asyncio.run(telegram_config._wait_for_rate_limit(mock_logger))
+            # Test async method directly
+            await telegram_config._wait_for_rate_limit(mock_logger)
 
             # Should not have called sleep
             mock_sleep.assert_not_called()
             # Should have set last send time
             assert telegram_config._last_send_time is not None
 
-    def test_wait_for_rate_limit_individual_with_wait(
+    async def test_wait_for_rate_limit_individual_with_wait(
         self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
     ) -> None:
         """Test _wait_for_rate_limit for individual chat needing to wait."""
@@ -964,7 +924,7 @@ class TestTelegramNotificationConfig:
         # Mock asyncio.sleep to avoid actual waiting in tests
         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             # Test through asyncio.run
-            asyncio.run(telegram_config._wait_for_rate_limit(mock_logger))
+            await telegram_config._wait_for_rate_limit(mock_logger)
 
             # Should have called sleep once with some wait time
             assert mock_sleep.call_count == 1
@@ -973,7 +933,7 @@ class TestTelegramNotificationConfig:
             # Should have updated last send time
             assert telegram_config._last_send_time is not None
 
-    def test_wait_for_rate_limit_group_with_wait(
+    async def test_wait_for_rate_limit_group_with_wait(
         self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
     ) -> None:
         """Test _wait_for_rate_limit for group chat needing to wait."""
@@ -983,7 +943,7 @@ class TestTelegramNotificationConfig:
         # Mock asyncio.sleep to avoid actual waiting in tests
         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             # Test through asyncio.run
-            asyncio.run(telegram_config._wait_for_rate_limit(mock_logger))
+            await telegram_config._wait_for_rate_limit(mock_logger)
 
             # Should have called sleep once with some wait time
             assert mock_sleep.call_count == 1
@@ -1129,7 +1089,7 @@ class TestTelegramNotificationConfig:
         # Most recent timestamp should be very close to now
         assert abs(TelegramNotificationConfig._global_send_times[-1] - time.time()) < 0.1
 
-    def test_global_rate_limiting_integrated_with_per_chat(
+    async def test_global_rate_limiting_integrated_with_per_chat(
         self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
     ) -> None:
         """Test that global and per-chat rate limiting work together."""
@@ -1146,7 +1106,7 @@ class TestTelegramNotificationConfig:
 
         # Mock asyncio.sleep to capture wait time
         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-            asyncio.run(telegram_config._wait_for_rate_limit(mock_logger))
+            await telegram_config._wait_for_rate_limit(mock_logger)
 
             # Should have called sleep once
             assert mock_sleep.call_count == 1
@@ -1182,7 +1142,7 @@ class TestTelegramNotificationConfig:
         assert wait_time_1 > 0  # Should require waiting
         assert wait_time_2 > 0  # Should require waiting
 
-    def test_wait_for_rate_limit_global_dominates(
+    async def test_wait_for_rate_limit_global_dominates(
         self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
     ) -> None:
         """Test _wait_for_rate_limit when global rate limit requires longer wait than per-chat."""
@@ -1199,7 +1159,7 @@ class TestTelegramNotificationConfig:
             TelegramNotificationConfig._global_send_times.append(current_time - 0.8 + i * 0.025)
 
         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-            asyncio.run(telegram_config._wait_for_rate_limit(mock_logger))
+            await telegram_config._wait_for_rate_limit(mock_logger)
 
             # Should have called sleep for global rate limiting
             assert mock_sleep.call_count == 1
@@ -1212,7 +1172,7 @@ class TestTelegramNotificationConfig:
             assert "Global rate limiting" in log_message
             assert "30 msg/sec" in log_message
 
-    def test_wait_for_rate_limit_per_chat_dominates(
+    async def test_wait_for_rate_limit_per_chat_dominates(
         self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
     ) -> None:
         """Test _wait_for_rate_limit when per-chat rate limit requires longer wait than global."""
@@ -1224,7 +1184,7 @@ class TestTelegramNotificationConfig:
         telegram_config._last_send_time = time.time() - 1.0  # Group needs ~2s wait
 
         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
-            asyncio.run(telegram_config._wait_for_rate_limit(mock_logger))
+            await telegram_config._wait_for_rate_limit(mock_logger)
 
             # Should have called sleep for per-chat rate limiting
             assert mock_sleep.call_count == 1
@@ -1236,7 +1196,7 @@ class TestTelegramNotificationConfig:
             log_message = mock_logger.debug.call_args[0][0]
             assert "Rate limiting group chat" in log_message
 
-    def test_wait_for_rate_limit_records_global_send_time(
+    async def test_wait_for_rate_limit_records_global_send_time(
         self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
     ) -> None:
         """Test that _wait_for_rate_limit records global send time."""
@@ -1248,7 +1208,7 @@ class TestTelegramNotificationConfig:
         telegram_config._last_send_time = None
 
         with patch("asyncio.sleep", new_callable=AsyncMock):
-            asyncio.run(telegram_config._wait_for_rate_limit(mock_logger))
+            await telegram_config._wait_for_rate_limit(mock_logger)
 
             # Should have recorded global send time
             assert len(TelegramNotificationConfig._global_send_times) == initial_count + 1

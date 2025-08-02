@@ -94,6 +94,7 @@ show_missing = true
 directory = "htmlcov"
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 filterwarnings = [
     # Suppress AsyncMock coroutine warnings in Telegram notification tests
     # These warnings occur when testing sync methods that wrap async operations with asyncio.run()
@@ -120,6 +121,7 @@ ignore = [
   "G004",
   "S311",
   "B017",
+  "S105",   # hardcoded passwords (false positives in test data)
   "S106",
   "G003",
   "S101",   # use of assert
