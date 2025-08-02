@@ -68,6 +68,9 @@ typing = [
 ]
 
 [package.dev-dependencies]
+dev = [
+    { name = "pytest-asyncio" },
+]
 test = [
     { name = "pytest-asyncio" },
 ]
@@ -116,6 +119,7 @@ requires-dist = [
 provides-extras = ["dev", "test", "linters", "security", "typing", "docs"]
 
 [package.metadata.requires-dev]
+dev = [{ name = "pytest-asyncio", specifier = ">=1.1.0" }]
 test = [{ name = "pytest-asyncio", specifier = ">=1.1.0" }]
 
 [[package]]
