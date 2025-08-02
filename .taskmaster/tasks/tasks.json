@@ -429,7 +429,7 @@
             "title": "Handle HTTP 429 'Too Many Requests' responses with retry and backoff",
             "description": "Implement logic to detect HTTP 429 responses from Telegram API, read the Retry-After header, and wait using asyncio.sleep() before retrying the request with exponential backoff.",
             "dependencies": [],
-            "details": "On receiving a 429 error, parse the Retry-After header to determine wait time. Use asyncio.sleep() to delay retries. Implement exponential backoff for repeated 429 errors to avoid rapid retry loops.",
+            "details": "On receiving a 429 error, parse the Retry-After header to determine wait time. Use asyncio.sleep() to delay retries. Implement exponential backoff for repeated 429 errors to avoid rapid retry loops.\n<info added on 2025-08-02T19:53:04.559Z>\nTesting guidelines for HTTP 429 handling: Test through sync send_message() interface using pytest-asyncio with asyncio_mode=\"auto\". Mock asyncio.run() to capture retry behavior - use side_effect=[False, True] to simulate initial failure then success. Use AsyncMock for telegram.Bot instances and HTTP exceptions. Verify retry call count matches expected behavior. This pattern maintains PRD compliance by testing sync wrapper while handling async operations underneath.\n</info added on 2025-08-02T19:53:04.559Z>",
             "status": "pending",
             "testStrategy": "Unit tests mocking 429 responses with various Retry-After values. Verify correct sleep durations and retry attempts with exponential backoff."
           },
@@ -441,7 +441,7 @@
               "8.1",
               "8.2"
             ],
-            "details": "Use timestamp queues or sliding windows to monitor recent message activity. Before sending, check if sending now would exceed any limit and delay if necessary to stay within limits.",
+            "details": "Use timestamp queues or sliding windows to monitor recent message activity. Before sending, check if sending now would exceed any limit and delay if necessary to stay within limits.\n<info added on 2025-08-02T19:53:21.918Z>\nTESTING HINT: When implementing timestamp tracking, follow these async testing best practices:\n\n1. Use sync send_message() interface for all tests - never call _send_message_async() directly\n2. Configure pytest-asyncio with asyncio_mode=\"auto\" for async test functions  \n3. Mock asyncio.run() and time.time() to control timing scenarios\n4. Test rate limiting logic through the sync wrapper:\n   ```python\n   async def test_rate_limiting_timestamp_tracking(self, telegram_config, mock_logger):\n       with patch(\"asyncio.run\") as mock_asyncio_run, patch(\"time.time\") as mock_time:\n           mock_time.side_effect = [1000, 1000.5, 1001.5]  # Simulate timing\n           mock_asyncio_run.return_value = True\n           \n           # Multiple calls should trigger rate limiting\n           result1 = telegram_config.send_message(\"title1\", \"msg1\", mock_logger)\n           result2 = telegram_config.send_message(\"title2\", \"msg2\", mock_logger)\n           \n           assert mock_asyncio_run.call_count == 2\n   ```\n\nThis maintains PRD's asyncio.run() pattern while enabling proper async timestamp tracking tests.\n</info added on 2025-08-02T19:53:21.918Z>",
             "status": "pending",
             "testStrategy": "Unit tests verifying that messages are delayed appropriately when limits are about to be exceeded, preventing 429 errors."
           },
@@ -455,7 +455,7 @@
               "8.3",
               "8.4"
             ],
-            "details": "Coordinate per-chat, per-group, and global rate limiting with 429 response handling and retry/backoff logic. Ensure message sending respects all limits and recovers gracefully from rate limit errors.",
+            "details": "Coordinate per-chat, per-group, and global rate limiting with 429 response handling and retry/backoff logic. Ensure message sending respects all limits and recovers gracefully from rate limit errors.\n<info added on 2025-08-02T19:53:39.536Z>\nTesting guidance: For comprehensive rate limiting integration testing, use the proven async testing pattern with pytest-asyncio configuration (asyncio_mode=\"auto\" in pyproject.toml). Always test through the sync send_message() interface as mandated by the PRD. Mock both asyncio.run() and asyncio.sleep() for complete control over async flow. Test the complete sequence: rate limiting → 429 handling → retry → success using side_effect to simulate multiple states. Use AsyncMock for telegram.Bot instances and async dependencies. This maintains the PRD's asyncio.run() isolation pattern while thoroughly testing complex async retry logic.\n</info added on 2025-08-02T19:53:39.536Z>",
             "status": "pending",
             "testStrategy": "Comprehensive integration tests simulating high message volumes, 429 errors, and verifying correct delays, retries, and successful message delivery."
           }
@@ -477,15 +477,70 @@
       {
         "id": 10,
         "title": "Add comprehensive unit tests with AsyncMock",
-        "description": "Create full test coverage for Telegram notification functionality using AsyncMock",
-        "details": "Create test_telegram_notification.py following existing test patterns. Use AsyncMock from unittest.mock for async function testing. Test scenarios: successful message sending, various error conditions, message splitting, rate limiting, configuration validation. Mock telegram.Bot and all async operations. Ensure 100% code coverage for TelegramNotificationConfig class. Follow existing test patterns from test_pushbullet_notification.py.",
-        "testStrategy": "Run tests with `uv run invoke tests` and verify 100% coverage for Telegram notification code. Use pytest-asyncio is not required since we're testing sync interfaces that internally use asyncio.run(). Validate all edge cases and error conditions are covered.",
-        "priority": "medium",
+        "description": "Create full test coverage for Telegram notification functionality using proven async testing patterns that resolved 29 asyncio.run() test failures",
+        "status": "pending",
         "dependencies": [
           9
         ],
-        "status": "pending",
-        "subtasks": []
+        "priority": "medium",
+        "details": "Create test_telegram_notification.py following proven async testing patterns. CRITICAL: Always test through sync send_message() interface, never call _send_message_async() directly. Use pytest-asyncio with asyncio_mode='auto' configuration. Mock asyncio.run() for sync wrapper testing to capture PRD's asyncio.run() pattern. Use AsyncMock for async dependencies (telegram.Bot, asyncio.sleep, HTTP clients). Test scenarios: successful message sending, various error conditions, message splitting, rate limiting, configuration validation. Ensure 100% code coverage for TelegramNotificationConfig class. Add pytest-asyncio dependency to test group and configure S105 ignore for test data tokens in ruff.",
+        "testStrategy": "Run tests with `uv run invoke tests` and verify 100% coverage for Telegram notification code. Use pytest-asyncio with asyncio_mode='auto' for automatic async test detection. Essential test patterns: 1) Basic success tests mocking asyncio.run() return values, 2) Async rate limiting tests using AsyncMock for asyncio.sleep, 3) Complex integration tests with retry patterns using mock_asyncio_run.side_effect. Validate all edge cases and error conditions are covered while maintaining PRD's event loop isolation.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Configure pytest-asyncio and test dependencies",
+            "description": "Add pytest-asyncio dependency and configure asyncio test mode",
+            "status": "pending",
+            "dependencies": [],
+            "details": "Add pytest-asyncio to test group dependencies in pyproject.toml. Configure asyncio_mode='auto' in pyproject.toml [tool.pytest.ini_options] section for automatic async test detection. Add S105 to ruff ignore list for test data tokens. This configuration enables comprehensive async testing while maintaining compatibility with existing sync test patterns.",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Create basic sync interface tests with asyncio.run() mocking",
+            "description": "Test send_message() method through sync interface using asyncio.run() mocks",
+            "status": "pending",
+            "dependencies": [],
+            "details": "Create test_send_message_success() and test_send_message_failure() functions that mock asyncio.run() and test the sync send_message() interface. Never call _send_message_async() directly. Use mock_asyncio_run.return_value for success cases and mock_asyncio_run.side_effect for exceptions. Verify that asyncio.run() is called with correct arguments and return values are properly handled.",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement async rate limiting tests",
+            "description": "Test rate limiting functionality using AsyncMock for async dependencies",
+            "status": "pending",
+            "dependencies": [],
+            "details": "Create async test functions for _wait_for_rate_limit() method using AsyncMock for asyncio.sleep. Test both global and per-chat rate limiting scenarios. Mock time.time() to simulate rate limit conditions. Verify that proper delays are calculated and asyncio.sleep is called with correct values. Use pytest-asyncio's automatic async test detection.",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Test error handling and retry patterns",
+            "description": "Create comprehensive error handling tests with retry logic",
+            "status": "pending",
+            "dependencies": [],
+            "details": "Test various telegram.error exceptions (TelegramError, Unauthorized, BadRequest, etc.) using AsyncMock. Create complex integration tests using mock_asyncio_run.side_effect with lists to simulate retry patterns (e.g., [False, True] for one retry then success). Verify error logging, exception wrapping, and retry logic through the sync interface.",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Test message splitting and formatting",
+            "description": "Verify message splitting for 4096 character limit and MarkdownV2 formatting",
+            "status": "pending",
+            "dependencies": [],
+            "details": "Test _split_message() method with various message lengths and formats. Test MarkdownV2 escaping using AsyncMock for telegram.Bot operations. Verify that long messages are properly split and each chunk is sent separately. Mock multiple asyncio.run() calls for multi-part messages using side_effect patterns.",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Test configuration validation and edge cases",
+            "description": "Comprehensive testing of configuration validation and edge cases",
+            "status": "pending",
+            "dependencies": [],
+            "details": "Test required_fields validation, invalid token/chat_id handling, and configuration edge cases. Test with missing dependencies, malformed config data, and various initialization scenarios. Use AsyncMock for any async validation operations. Ensure 100% code coverage including error paths and edge conditions.",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 11,
