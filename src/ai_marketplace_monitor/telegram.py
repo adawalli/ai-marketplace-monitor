@@ -85,7 +85,37 @@ class TelegramNotificationConfig(PushNotificationConfig):
         import asyncio
 
         try:
-            return asyncio.run(self._send_message_async(title, message, logger))
+            # Check if an event loop is already running
+            try:
+                asyncio.get_running_loop()
+                # If we get here, an event loop is already running
+                # We need to use asyncio.create_task or similar
+                if logger:
+                    logger.debug("Event loop already running, using alternative async execution")
+                # Create a new event loop in a thread to avoid conflicts
+                import concurrent.futures
+
+                def run_async():
+                    # Create a new event loop for this thread
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+                    try:
+                        return new_loop.run_until_complete(
+                            self._send_message_async(title, message, logger)
+                        )
+                    finally:
+                        new_loop.close()
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(run_async)
+                    return future.result(timeout=60)  # 60 second timeout for notification
+
+            except RuntimeError:
+                # No event loop running, safe to use asyncio.run
+                if logger:
+                    logger.debug("No event loop running, using asyncio.run")
+                return asyncio.run(self._send_message_async(title, message, logger))
+
         except Exception as e:
             if logger:
                 logger.error(f"Telegram notification failed: {e}")

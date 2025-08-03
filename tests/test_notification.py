@@ -114,29 +114,27 @@ class TestTelegramNotificationConfig:
         config = TelegramNotificationConfig(
             name="test", telegram_token=None, telegram_chat_id="123"
         )
-        with patch("asyncio.run", return_value=False) as mock_run:
-            result = config.send_message("title", "message", None)
-            assert result is False
-            # asyncio.run should be called, but async method returns False due to missing credentials
-            mock_run.assert_called_once()
+        # Test behavior: missing credentials should result in False
+        result = config.send_message("title", "message", None)
+        assert result is False
 
     def test_send_message_success_path(
         self: "Self", telegram_config: TelegramNotificationConfig
     ) -> None:
         """Test successful message sending through sync interface."""
-        with patch("asyncio.run", return_value=True) as mock_run:
+        # Mock the async implementation to return True for success
+        with patch.object(telegram_config, "_send_message_async", return_value=True):
             result = telegram_config.send_message("title", "message", None)
             assert result is True
-            mock_run.assert_called_once()
 
     def test_send_message_failure_path(
         self: "Self", telegram_config: TelegramNotificationConfig
     ) -> None:
         """Test failed message sending through sync interface."""
-        with patch("asyncio.run", return_value=False) as mock_run:
+        # Mock the async implementation to return False for failure
+        with patch.object(telegram_config, "_send_message_async", return_value=False):
             result = telegram_config.send_message("title", "message", None)
             assert result is False
-            mock_run.assert_called_once()
 
     def test_is_group_chat_individual_positive_id(self: "Self") -> None:
         """Test _is_group_chat returns False for positive chat IDs (individual chats)."""
@@ -251,17 +249,10 @@ class TestTelegramNotificationConfig:
         self: "Self", telegram_config: TelegramNotificationConfig, mock_logger: MagicMock
     ) -> None:
         """Test HTTP 429 error handling with Retry-After header parsing."""
-        with patch("asyncio.run") as mock_run:
-            # Mock the async method to simulate 429 handling
-            async def mock_async_method(title: str, message: str, logger: MagicMock) -> bool:
-                # This would be the actual 429 handling logic
-                return True
-
-            mock_run.return_value = True
+        # Mock the async implementation to return True for successful 429 handling
+        with patch.object(telegram_config, "_send_message_async", return_value=True):
             result = telegram_config.send_message("Title", "Message", mock_logger)
-
             assert result is True
-            mock_run.assert_called_once()
 
     def test_config_with_username_chat_id(self: "Self") -> None:
         """Test configuration with username-style chat ID."""
