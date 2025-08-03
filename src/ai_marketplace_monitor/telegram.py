@@ -1,6 +1,7 @@
 import time
 from collections import deque
 from dataclasses import dataclass
+from datetime import timedelta
 from logging import Logger
 from typing import TYPE_CHECKING, ClassVar, Deque, List, Type
 
@@ -254,13 +255,20 @@ class TelegramNotificationConfig(PushNotificationConfig):
             except telegram.error.RetryAfter as e:
                 # Handle HTTP 429 with Retry-After header
                 retry_after = e.retry_after
+                # Convert timedelta to float seconds if needed for asyncio.sleep compatibility
+                sleep_duration = (
+                    retry_after.total_seconds()
+                    if isinstance(retry_after, timedelta)
+                    else float(retry_after)
+                )
+
                 if logger:
                     logger.warning(
-                        f"Telegram rate limit hit (429), waiting {retry_after} seconds (attempt {attempt + 1}/{max_retries + 1})"
+                        f"Telegram rate limit hit (429), waiting {sleep_duration} seconds (attempt {attempt + 1}/{max_retries + 1})"
                     )
 
                 if attempt < max_retries:
-                    await asyncio.sleep(retry_after)
+                    await asyncio.sleep(sleep_duration)
                     continue
                 else:
                     if logger:
