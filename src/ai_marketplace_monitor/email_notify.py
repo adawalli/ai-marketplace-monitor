@@ -119,7 +119,7 @@ class EmailNotificationConfig(NotificationConfig):
             return ""
 
         title += " ".join(cnts)
-        title += f"{listings[0].name} {p.plural_noun('listing', len(listings)-(0 if force else n_notified))} from {listings[0].marketplace}"
+        title += f"{listings[0].name} {p.plural_noun('listing', len(listings) - (0 if force else n_notified))} from {listings[0].marketplace}"
         return title
 
     def get_text_message(
@@ -155,7 +155,7 @@ class EmailNotificationConfig(NotificationConfig):
                     f"{prefix} [{rating.conclusion} ({rating.score})] {listing.title}\n"
                     f"{listing.price}, {listing.location}\n"
                     f"{listing.post_url.split('?')[0]}\n"
-                    f"AI: {rating.comment}"
+                    f"\nAI: {rating.comment}"
                 )
             )
         message = "\n\n".join(messages)

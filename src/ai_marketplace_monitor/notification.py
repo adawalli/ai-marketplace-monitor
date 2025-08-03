@@ -186,7 +186,7 @@ class PushNotificationConfig(NotificationConfig):
                         f"[{rating.conclusion} ({rating.score})] {listing.title}\n"
                         f"{listing.price}, {listing.location}\n"
                         f"{listing.post_url.split('?')[0]}\n{desc}{desc_newline}"
-                        f"AI: {rating.comment}"
+                        f"\nAI: {rating.comment}"
                     )
                 )
             elif self.message_format == "markdown":
@@ -203,23 +203,23 @@ class PushNotificationConfig(NotificationConfig):
                         f"[**{listing.title}**]({listing.post_url.split('?')[0]})\n"
                         f"{listing.price}, {listing.location}\n"
                         f"{desc}{desc_newline}"
-                        f"**AI**: {rating.comment}"
+                        f"\n**AI**: {rating.comment}"
                     )
                 )
             elif self.message_format == "html":
                 desc_newline = "<br>" if desc else ""
                 msg = (
                     (
-                        f"""<a href="{listing.post_url.split('?')[0]}"><b>{listing.title}</b></a>"""
+                        f"""<a href="{listing.post_url.split("?")[0]}"><b>{listing.title}</b></a>"""
                         f"<br>{listing.price}, {listing.location}{desc_newline}{desc}"
                     )
                     if rating.comment == AIResponse.NOT_EVALUATED
                     else (
                         f"<b>[{rating.conclusion} ({rating.score})]</b>"
-                        f"""<a href="{listing.post_url.split('?')[0]}"><b>{listing.title}</b></a>"""
+                        f"""<a href="{listing.post_url.split("?")[0]}"><b>{listing.title}</b></a>"""
                         f"<br>{listing.price}, {listing.location}<br>"
                         f"{desc}{desc_newline}"
-                        f"<b>AI</b>: <i>{rating.comment}</i>"
+                        f"<br><b>AI</b>: <i>{rating.comment}</i>"
                     )
                 )
             msgs[ns].append((listing, msg))
