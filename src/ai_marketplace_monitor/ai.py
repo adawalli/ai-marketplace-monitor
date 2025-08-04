@@ -255,6 +255,10 @@ class OpenAIBackend(AIBackend):
                 api_key=self.config.api_key,
                 base_url=self.config.base_url or self.base_url,
                 timeout=self.config.timeout,
+                default_headers={
+                    "X-Title": "AI Marketplace Monitor",
+                    "HTTP-Referer": "https://github.com/BoPeng/ai-marketplace-monitor",
+                },
             )
             if self.logger:
                 self.logger.info(f"""{hilight("[AI]", "name")} {self.config.name} connected.""")
