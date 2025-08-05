@@ -478,6 +478,41 @@ telegram_chat_id = '-987654321'  # Note: negative ID for groups
 - Use environment variables for sensitive information
 - Keep your bot token private - anyone with access can send messages as your bot
 
+#### Rate Limiting Configuration
+
+AI Marketplace Monitor includes built-in rate limiting for all notification methods to prevent API rate limit violations. Telegram notifications automatically enable rate limiting with smart defaults:
+
+- **Individual chats**: 1 message per 1.1 seconds
+- **Group chats**: 1 message per 3.0 seconds
+- **Global limit**: 30 messages per second across all Telegram instances
+
+The system automatically detects whether a chat ID represents an individual chat (positive numbers) or group chat (negative numbers) and applies appropriate limits.
+
+**Customizing Rate Limits**
+
+For other notification types, you can enable and configure rate limiting:
+
+```toml
+[notification.email]
+smtp_password = 'your-password'
+rate_limit_enabled = true
+instance_rate_limit = 2    # 2 seconds between messages for this instance
+global_rate_limit = 60     # 60 seconds between any messages globally
+
+[user.me]
+email = 'your@email.com'
+notify_with = 'email'
+```
+
+**Rate Limiting Behavior**
+
+- **Instance-level limiting**: Controls the minimum time between messages for a specific notification configuration
+- **Global limiting**: Controls the minimum time between any messages across all instances of the same notification type
+- **Automatic detection**: The system uses the longer of the two wait times to ensure compliance
+- **Smart logging**: Rate limit delays are logged with the specific limit that triggered the wait
+
+Rate limiting is disabled by default for all notification types except Telegram, allowing you to opt-in as needed for your specific use case.
+
 ### Adjust prompt and notification level
 
 _ai-marketplace-monitor_ asks AI services to evaluate listings against the criteria that you specify with prompts in four parts:
