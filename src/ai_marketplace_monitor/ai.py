@@ -1,3 +1,4 @@
+import os
 import re
 import time
 from dataclasses import asdict, dataclass, field
@@ -6,6 +7,10 @@ from logging import Logger
 from typing import Any, ClassVar, Generic, Optional, Type, TypeVar
 
 from diskcache import Cache  # type: ignore
+from langchain_community.chat_models import ChatOllama
+from langchain_core.language_models import BaseChatModel
+from langchain_deepseek import ChatDeepSeek
+from langchain_openai import ChatOpenAI
 from openai import OpenAI  # type: ignore
 from rich.pretty import pretty_repr
 
@@ -18,6 +23,7 @@ class AIServiceProvider(Enum):
     OPENAI = "OpenAI"
     DEEPSEEK = "DeepSeek"
     OLLAMA = "Ollama"
+    OPENROUTER = "OpenRouter"
 
 
 @dataclass
@@ -366,3 +372,69 @@ class OllamaBackend(OpenAIBackend):
     @classmethod
     def get_config(cls: Type["OllamaBackend"], **kwargs: Any) -> OllamaConfig:
         return OllamaConfig(**kwargs)
+
+
+# Provider mapping system for LangChain integration
+def _create_openai_model(config: AIConfig) -> BaseChatModel:
+    """Create a ChatOpenAI model instance from AIConfig."""
+    api_key = config.api_key or os.getenv("OPENAI_API_KEY")
+
+    return ChatOpenAI(
+        api_key=api_key,
+        model=config.model or "gpt-4o",
+        base_url=config.base_url,
+        timeout=config.timeout,
+        max_retries=config.max_retries,
+        default_headers={
+            "X-Title": "AI Marketplace Monitor",
+            "HTTP-Referer": "https://github.com/BoPeng/ai-marketplace-monitor",
+        },
+    )
+
+
+def _create_openrouter_model(config: AIConfig) -> BaseChatModel:
+    """Create a ChatOpenAI model instance configured for OpenRouter."""
+    api_key = config.api_key or os.getenv("OPENROUTER_API_KEY")
+    base_url = config.base_url or "https://openrouter.ai/api/v1"
+
+    return ChatOpenAI(
+        api_key=api_key,
+        model=config.model or "gpt-4o",
+        base_url=base_url,
+        timeout=config.timeout,
+        max_retries=config.max_retries,
+        default_headers={
+            "X-Title": "AI Marketplace Monitor",
+            "HTTP-Referer": "https://github.com/BoPeng/ai-marketplace-monitor",
+        },
+    )
+
+
+def _create_deepseek_model(config: AIConfig) -> BaseChatModel:
+    """Create a ChatDeepSeek model instance from AIConfig."""
+    api_key = config.api_key or os.getenv("DEEPSEEK_API_KEY")
+
+    return ChatDeepSeek(
+        api_key=api_key,
+        model=config.model or "deepseek-chat",
+        timeout=config.timeout,
+        max_retries=config.max_retries,
+    )
+
+
+def _create_ollama_model(config: AIConfig) -> BaseChatModel:
+    """Create a ChatOllama model instance from AIConfig."""
+    return ChatOllama(
+        model=config.model or "deepseek-r1:14b",
+        base_url=config.base_url or "http://localhost:11434",
+        timeout=config.timeout,
+        num_ctx=4096,  # Default context length
+    )
+
+
+provider_map = {
+    "openai": _create_openai_model,
+    "deepseek": _create_deepseek_model,
+    "ollama": _create_ollama_model,
+    "openrouter": _create_openrouter_model,
+}

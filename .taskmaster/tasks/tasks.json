@@ -107,8 +107,54 @@
         "dependencies": [
           2
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create provider_map dictionary structure",
+            "description": "Define the provider_map dictionary with keys for each provider ('openai', 'deepseek', 'ollama', 'openrouter') and placeholder lambda functions for model constructors.",
+            "dependencies": [],
+            "details": "Initialize provider_map as a Python dictionary. Each key corresponds to a provider string and maps to a lambda function that accepts an AIConfig object and returns a configured LangChain chat model instance.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Implement OpenAI and OpenRouter provider mapping logic",
+            "description": "Implement the lambda functions for 'openai' and 'openrouter' keys in provider_map, configuring LangChain ChatOpenAI models with appropriate parameters, including custom base_url and headers for OpenRouter.",
+            "dependencies": [],
+            "details": "For 'openai', map AIConfig parameters to ChatOpenAI constructor arguments. For 'openrouter', use ChatOpenAI with custom base_url and headers derived from AIConfig and environment variables as needed.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement DeepSeek and Ollama provider mapping logic",
+            "description": "Implement the lambda functions for 'deepseek' and 'ollama' keys in provider_map, using the langchain-deepseek package for DeepSeek with API key from environment variables, and appropriate LangChain model constructors for Ollama.",
+            "dependencies": [],
+            "details": "For DeepSeek, retrieve DEEPSEEK_API_KEY from environment variables and pass it to the DeepSeek model constructor. For Ollama, map AIConfig parameters to the Ollama LangChain chat model constructor.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Handle environment variables and config integration",
+            "description": "Implement logic to correctly read and apply environment variables (e.g., DEEPSEEK_API_KEY) and integrate existing TOML config fields into provider mapping functions.",
+            "dependencies": [],
+            "details": "Ensure environment variables are accessed securely and override or supplement AIConfig parameters as needed. Validate that all required config fields are respected and correctly passed to model constructors.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Unit test each provider mapping function",
+            "description": "Write and execute unit tests for each provider mapping lambda function in provider_map, verifying that given sample AIConfig inputs, the returned LangChain chat model instances have expected types and parameters.",
+            "dependencies": [],
+            "details": "Create mock AIConfig objects with representative parameters for each provider. Assert that the returned model instances match expected classes and configurations. Include tests for environment variable handling and error cases.",
+            "status": "done",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 4,
@@ -239,7 +285,7 @@
     ],
     "metadata": {
       "created": "2025-08-06T00:33:31.026Z",
-      "updated": "2025-08-06T00:53:37.157Z",
+      "updated": "2025-08-06T01:01:08.293Z",
       "description": "Tasks for master context"
     }
   }
