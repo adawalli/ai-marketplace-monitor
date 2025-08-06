@@ -1,11 +1,41 @@
 # Task ID: 7
 # Title: Create Response Adapter Layer
-# Status: pending
+# Status: done
 # Dependencies: 4
 # Priority: high
-# Description: Develop adapter to convert LangChain response objects into existing AIResponse format to maintain cache compatibility and API consistency.
+# Description: Develop adapter to convert LangChain response objects into existing AIResponse format to maintain cache compatibility and API consistency. Enhance AIResponse to include token usage tracking and preserve all relevant metadata from LangChain responses.
 # Details:
-Implement adapter functions or classes that take LangChain chat model responses and produce AIResponse objects identical in structure and serialization to existing ones. Handle token usage, message content, and metadata. Ensure serialization/deserialization compatibility with existing cache system.
+Implement adapter functions or classes that take LangChain chat model responses and produce AIResponse objects identical in structure and serialization to existing ones, but now extended to include token usage (for cost monitoring), usage_metadata (token counts), response_metadata (model info), and any other rich information present in LangChain responses. Ensure that the adapter extracts and maps all relevant fields, not just message content. Update AIResponse as needed to support these new fields while maintaining backward and cache compatibility. Ensure serialization/deserialization compatibility with the existing cache system.
 
 # Test Strategy:
-Test adapter with mocked LangChain responses and verify output matches expected AIResponse objects. Test cache serialization round-trip with adapted responses.
+Test adapter with mocked LangChain responses containing message content, token usage, and metadata. Verify that the output AIResponse objects include all expected fields and match the extended format. Test cache serialization round-trip with adapted responses to ensure compatibility. Add tests to confirm that cost monitoring fields (token usage) are accurately tracked and preserved.
+
+# Subtasks:
+## 1. Analyze LangChain response structure for all relevant metadata [done]
+### Dependencies: None
+### Description: Review LangChain chat model response objects to identify all available metadata fields, including token usage, model info, and any other relevant data needed for AIResponse.
+### Details:
+
+
+## 2. Extend AIResponse to support token usage and metadata fields [done]
+### Dependencies: None
+### Description: Update the AIResponse class to include fields for token usage (prompt, completion, total), usage_metadata, and response_metadata. Ensure backward compatibility and cache serialization compatibility.
+### Details:
+
+
+## 3. Implement adapter to map LangChain responses to extended AIResponse [done]
+### Dependencies: None
+### Description: Develop adapter logic that extracts message content, token usage, and all relevant metadata from LangChain responses and constructs an AIResponse object with the new fields.
+### Details:
+
+
+## 4. Test adapter with mocked LangChain responses including metadata [done]
+### Dependencies: None
+### Description: Write tests using mocked LangChain responses that include token usage and metadata. Verify that the adapted AIResponse objects contain all expected fields and values.
+### Details:
+
+
+## 5. Validate cache serialization/deserialization with extended AIResponse [done]
+### Dependencies: None
+### Description: Ensure that AIResponse objects with new metadata fields can be serialized and deserialized with the existing cache system without errors or data loss.
+### Details:

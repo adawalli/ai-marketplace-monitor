@@ -170,7 +170,31 @@ class AIResponse:
         )
         if res is None:
             return None
-        return AIResponse(**res)
+
+        # Handle cache migration for legacy AIResponse objects without new metadata fields
+        # Ensure backward compatibility with existing cached responses
+        if not isinstance(res, dict):
+            return None
+
+        # Provide defaults for new metadata fields if missing from cached response
+        migrated_res = res.copy()
+        if "usage_metadata" not in migrated_res:
+            migrated_res["usage_metadata"] = {}
+        if "response_metadata" not in migrated_res:
+            migrated_res["response_metadata"] = {}
+
+        # Ensure metadata fields are dict types (handle None values from old cache entries)
+        if migrated_res.get("usage_metadata") is None:
+            migrated_res["usage_metadata"] = {}
+        if migrated_res.get("response_metadata") is None:
+            migrated_res["response_metadata"] = {}
+
+        try:
+            return AIResponse(**migrated_res)
+        except TypeError:
+            # If reconstruction fails due to incompatible cached data, return None
+            # This allows cache miss handling to regenerate the response
+            return None
 
     def to_cache(
         self: "AIResponse",
@@ -1015,9 +1039,9 @@ class LangChainBackend(AIBackend[AIConfig]):
         except ImportError:
             # Fallback if LangChain not available - create dummy exception classes
             # that will never match any actual exception instances
-            LangChainException = type("_FakeLangChainException", (), {})  # noqa: N806
-            OutputParserException = type("_FakeOutputParserException", (), {})  # noqa: N806
-            TracerException = type("_FakeTracerException", (), {})  # noqa: N806
+            LangChainException = type("_FakeLangChainException", (BaseException,), {})  # type: ignore # noqa: N806
+            OutputParserException = type("_FakeOutputParserException", (BaseException,), {})  # type: ignore # noqa: N806
+            TracerException = type("_FakeTracerException", (BaseException,), {})  # type: ignore # noqa: N806
 
         # Log original exception for debugging
         if self.logger:
@@ -1035,7 +1059,7 @@ class LangChainBackend(AIBackend[AIConfig]):
             return _return_mapped_exception(mapped_exc, "LangChain-core")
 
         if isinstance(e, OutputParserException):
-            mapped_exc = ValueError(
+            mapped_exc = RuntimeError(
                 f"{context_prefix}AI response parsing failed: {error_msg}. "
                 "The model response format was unexpected or malformed."
             )
@@ -1060,7 +1084,7 @@ class LangChainBackend(AIBackend[AIConfig]):
             return _return_mapped_exception(mapped_exc, "provider-connection")
 
         if exception_name == "AuthenticationError":
-            mapped_exc = ValueError(
+            mapped_exc = RuntimeError(
                 f"{context_prefix}Authentication error: {error_msg}. Check API key configuration."
             )
             return _return_mapped_exception(mapped_exc, "provider-auth")
@@ -1073,14 +1097,14 @@ class LangChainBackend(AIBackend[AIConfig]):
             return _return_mapped_exception(mapped_exc, "provider-rate-limit")
 
         if exception_name == "BadRequestError":
-            mapped_exc = ValueError(
+            mapped_exc = RuntimeError(
                 f"{context_prefix}Invalid request: {error_msg}. "
                 "Check model parameters and input format."
             )
             return _return_mapped_exception(mapped_exc, "provider-bad-request")
 
         if exception_name in ["NotFoundError", "PermissionDeniedError"]:
-            mapped_exc = ValueError(
+            mapped_exc = RuntimeError(
                 f"{context_prefix}Resource access error: {error_msg}. "
                 "Check model availability and permissions."
             )
@@ -1108,7 +1132,7 @@ class LangChainBackend(AIBackend[AIConfig]):
             pattern in error_msg.lower()
             for pattern in ["api_key", "authentication", "unauthorized"]
         ):
-            mapped_exc = ValueError(
+            mapped_exc = RuntimeError(
                 f"{context_prefix}Authentication error: {error_msg}. Check API key configuration."
             )
             return _return_mapped_exception(mapped_exc, "generic-auth-error")

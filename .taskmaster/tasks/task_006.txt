@@ -1,6 +1,6 @@
 # Task ID: 6
 # Title: Integrate OpenRouter Provider
-# Status: pending
+# Status: done
 # Dependencies: 3, 5
 # Priority: medium
 # Description: Add OpenRouter as a new provider type using ChatOpenAI with custom base_url and headers, enabling access to 200+ AI models.
@@ -9,3 +9,84 @@ Implement OpenRouter provider mapping in LangChainBackend using ChatOpenAI with 
 
 # Test Strategy:
 Unit test OpenRouter provider instantiation and API call simulation. Validate config parsing and error handling for missing or invalid keys.
+
+# Subtasks:
+## 1. Implement OpenRouter Provider Mapping in LangChainBackend [done]
+### Dependencies: None
+### Description: Add OpenRouter as a new provider in the provider_map dictionary using ChatOpenAI with custom base_url and headers. Support model format 'provider/model' and ensure compatibility with existing provider interface.
+### Details:
+Use ChatOpenAI with base_url='https://openrouter.ai/api/v1' and headers {'HTTP-Referer': 'https://ai-marketplace-monitor', 'X-Title': 'AI Marketplace Monitor'}. Parse model strings like 'anthropic/claude-3-sonnet' to set model parameter. Follow existing LangChain integration patterns.
+<info added on 2025-08-06T21:02:26.133Z>
+Verify that the existing _create_openrouter_model() function and provider mapping in ai.py meet all integration requirements. Implement validation to ensure model names follow the 'provider/model' format (e.g., 'anthropic/claude-3-sonnet'), returning clear error messages if invalid. Improve error handling for OpenRouter-specific failures with descriptive messages. Validate that timeout and retry configurations are correctly parsed and applied. Confirm that the required headers {'HTTP-Referer': 'https://ai-marketplace-monitor', 'X-Title': 'AI Marketplace Monitor'} are always set on OpenRouter requests. Update documentation and add or revise unit tests to cover these enhancements.
+</info added on 2025-08-06T21:02:26.133Z>
+<info added on 2025-08-06T21:16:45.965Z>
+Review confirms OpenRouter provider is already implemented in ai.py with correct enum, provider mapping, model creation function, and API key validation. Next, ensure explicit validation exists for model names to match the 'provider/model' pattern (e.g., 'anthropic/claude-3-sonnet'), returning clear error messages for invalid formats. Additionally, enhance error handling in OpenRouter integration to provide descriptive feedback for provider-specific failures, as outlined in the task requirements.
+</info added on 2025-08-06T21:16:45.965Z>
+<info added on 2025-08-06T21:19:58.081Z>
+All OpenRouter provider mapping requirements have been fully implemented:
+
+- Model name validation enforces the 'provider/model' format with clear error messages for invalid patterns.
+- API key validation ensures keys start with 'sk-or-' and provides descriptive feedback for invalid keys.
+- Error handling has been enhanced to map and report OpenRouter-specific failures with detailed messages.
+- Integration with _validate_config_compatibility() ensures OpenRouter-specific validation is consistently applied.
+- The _map_langchain_exception() function now includes OpenRouter error pattern recognition and mapping.
+- Timeout and retry configurations are validated and correctly applied to OpenRouter requests.
+- Required headers are always set on OpenRouter API calls.
+- Comprehensive unit tests (15+) have been added to test_ai.py and test_langchain_validation.py, covering all validation and error handling scenarios.
+
+Task 6.1 is now complete and ready for further testing.
+</info added on 2025-08-06T21:19:58.081Z>
+
+## 2. Update Configuration Parser to Support OpenRouter Provider [done]
+### Dependencies: 6.1
+### Description: Modify the TOML config parser to accept 'openrouter' as a valid provider type. Support OpenRouter-specific model naming conventions and validate presence and format of OpenRouter API keys.
+### Details:
+Ensure backward compatibility with existing configs. Validate API key format to start with 'sk-or-'. Update config schema and parsing logic to handle new provider and model formats.
+<info added on 2025-08-06T21:02:33.197Z>
+Enhance configuration validation for OpenRouter by implementing the following:
+
+- Add explicit API key format validation to ensure OpenRouter keys start with 'sk-or-'.
+- Implement model name validation to enforce the 'provider/model' pattern for OpenRouter models.
+- Integrate these validations into the _validate_config_compatibility() method (ai.py lines 595-615).
+- Extend _validate_mixed_configuration() (ai.py lines 726-738) to properly handle OpenRouter-specific validation cases.
+- Maintain backward compatibility with existing configurations throughout these enhancements.
+</info added on 2025-08-06T21:02:33.197Z>
+<info added on 2025-08-06T21:21:11.228Z>
+All configuration parser requirements for OpenRouter support have been fully implemented and verified:
+
+- 'openrouter' is included in supported_ai_backends and accepted by the TOML config parser.
+- API key and model name validation for OpenRouter is enforced via _validate_config_compatibility().
+- Mixed configuration handling and backward compatibility are maintained.
+- Validation logic is delegated to LangChainBackend.get_config(), ensuring consistent enforcement during config parsing.
+
+No further action is required for this subtask; all objectives have been met through the implementation work completed in 6.1. Task 6.2 can be marked as complete.
+</info added on 2025-08-06T21:21:11.228Z>
+
+## 3. Implement API Key Validation and Error Handling for OpenRouter [done]
+### Dependencies: 6.1, 6.2
+### Description: Add validation logic for OpenRouter API keys and models. Handle errors such as invalid keys, unsupported models, rate limiting, and quota issues with clear error messages.
+### Details:
+Check API key format (must start with 'sk-or-'). Implement model availability checks. Integrate error handling consistent with existing backend patterns. Provide user-friendly error messages for common failure cases.
+<info added on 2025-08-06T21:02:43.188Z>
+Enhance error handling to include OpenRouter-specific logic by updating the _map_langchain_exception() method (lines 648-681 in ai.py) to map OpenRouter error responses to clear, actionable error messages. Implement detection and handling of quota exceeded and rate limiting errors returned by the OpenRouter API, ensuring users receive precise feedback when limits are reached. Validate model availability with explicit error messages if a requested model is not supported or unavailable via OpenRouter. Provide user-friendly troubleshooting guidance for common OpenRouter integration issues, such as invalid API keys, misconfigured headers, or unsupported models. Ensure all OpenRouter-specific HTTP error codes and response formats are parsed and surfaced to users with consistent, helpful messaging.
+</info added on 2025-08-06T21:02:43.188Z>
+<info added on 2025-08-06T21:21:29.238Z>
+All API key validation and error handling requirements for OpenRouter are fully implemented. This includes API key format validation in both _create_openrouter_model() and _validate_config_compatibility(), OpenRouter-specific error mapping in _map_langchain_exception() with actionable messages and relevant documentation links, explicit model availability checks, and integrated troubleshooting guidance. Comprehensive test coverage (10 new tests) ensures all error scenarios are handled consistently with backend patterns, and all HTTP error codes and OpenRouter response formats are parsed and surfaced with clear, helpful messaging. Task 6.3 requirements are complete.
+</info added on 2025-08-06T21:21:29.238Z>
+
+## 4. Develop Unit and Integration Tests for OpenRouter Provider [done]
+### Dependencies: 6.1, 6.2, 6.3
+### Description: Write comprehensive tests covering OpenRouter provider instantiation, config parsing, API key validation, error handling, and simulated API responses. Include integration tests with LangChainBackend.
+### Details:
+Mock OpenRouter API responses to test provider behavior. Validate config parser accepts and rejects inputs correctly. Test error handling for invalid keys and unsupported models. Ensure seamless integration with existing AI backend.
+<info added on 2025-08-06T21:02:55.271Z>
+Expand the test suite to include:
+- Backward compatibility tests for OpenRouter provider, following patterns established in test_backward_compatibility.py to ensure legacy configurations and behaviors remain supported.
+- Concurrent access tests simulating multiple simultaneous requests to the OpenRouter provider, mirroring approaches used for LangChainBackend to validate thread safety and correct resource handling.
+- Configuration migration scenario tests to verify correct behavior when upgrading or changing configuration formats, ensuring smooth transitions and no regressions.
+- Integration tests with the marketplace evaluation workflow, confirming OpenRouter provider compatibility and correct operation within end-to-end user flows.
+- Enhanced validation tests for API key formats and model name formats, including edge cases and invalid input scenarios.
+- Expanded mocking of OpenRouter API responses to cover a wide range of error scenarios, such as rate limiting, malformed responses, and provider-specific error codes.
+- Detailed tests for OpenRouter-specific error handling and error mapping, ensuring all error conditions are surfaced and mapped consistently with other providers.
+- Update and expand configuration documentation to reflect new test cases, migration scenarios, and validation requirements.
+</info added on 2025-08-06T21:02:55.271Z>

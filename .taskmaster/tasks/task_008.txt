@@ -1,6 +1,6 @@
 # Task ID: 8
 # Title: Implement LangChain Exception Mapping
-# Status: pending
+# Status: done
 # Dependencies: 4
 # Priority: high
 # Description: Map LangChain exceptions to existing error patterns to preserve current error handling behavior across all providers.
@@ -9,3 +9,66 @@ Create exception mapping layer that catches LangChain exceptions and raises corr
 
 # Test Strategy:
 Write tests that simulate LangChain exceptions and verify correct mapped exceptions are raised with expected messages.
+
+# Subtasks:
+## 1. Exception Hierarchy Analysis & Mapping Strategy [done]
+### Dependencies: None
+### Description: Research and document LangChain's complete exception hierarchy, including provider-specific exceptions (OpenAI, Anthropic, etc.). Develop a detailed mapping strategy to existing SDK exceptions, covering exception chains, nested exceptions, and provider-specific behaviors with rationale.
+### Details:
+Analyze LangChain core and provider-specific exceptions from official docs and source code. Identify all relevant exception types and their relationships. Document how each LangChain exception maps to existing SDK exceptions, preserving error semantics and context.
+<info added on 2025-08-06T21:48:38.889Z>
+Expand the mapping logic in _map_langchain_exception to cover additional LangChain-specific exceptions identified during research. Ensure that new mappings align with established codebase patterns: use ValueError for configuration or input validation errors, RuntimeError for service or provider failures, and FileNotFoundError for missing resource scenarios. Document any new exception types added to the mapping, along with rationale for their corresponding SDK exception choices. Review and update exception mapping to handle nested or chained exceptions where applicable, preserving original error context and messages.
+</info added on 2025-08-06T21:48:38.889Z>
+<info added on 2025-08-06T21:49:23.826Z>
+Exception hierarchy analysis is complete. Key findings:
+
+- LangChain core exceptions include LangChainException (base), OutputParserException, and TracerException.
+- Provider-specific exceptions primarily wrap underlying client errors (e.g., OpenAI: APIConnectionError, APIError, APITimeoutError, AuthenticationError, BadRequestError, RateLimitError).
+- Provider modules generally do not define their own exception classes.
+- The current _map_langchain_exception implementation already covers common patterns.
+- Mapping strategy will extend _map_langchain_exception to comprehensively handle all identified LangChain-specific and wrapped provider exceptions, preserving exception chaining using 'from e' syntax.
+- All mappings will adhere to established codebase patterns: ValueError for configuration/input validation, RuntimeError for service/provider failures, and FileNotFoundError for missing resources.
+- Backward compatibility with existing error handling will be maintained.
+</info added on 2025-08-06T21:49:23.826Z>
+
+## 2. Exception Mapping Architecture Design [done]
+### Dependencies: 8.1
+### Description: Design the architecture for the exception mapping layer, ensuring context preservation, structured logging integration, and provider-specific handling. Address async exception handling and define integration points within LangChainBackend.
+### Details:
+Create design documents and diagrams illustrating the mapping layer. Specify how exceptions will be caught, transformed, and re-raised. Define interfaces for provider-specific behaviors and how async exceptions are handled. Plan integration with logging and monitoring.
+<info added on 2025-08-06T21:49:35.547Z>
+The architecture design will build upon the existing _map_langchain_exception method (ai.py, lines 948-1059), which already addresses basic exception mapping, OpenRouter-specific errors, connection and timeout handling, and configuration validation errors. The new design will extend this method to provide comprehensive LangChain exception support, ensuring backward compatibility. Enhancements will include modularizing provider-specific mappings, expanding coverage for new LangChain exception types, and integrating structured logging and monitoring at each mapping point. The design will also specify how to preserve context and error metadata during transformation, and outline strategies for seamless async exception handling within the updated mapping layer.
+</info added on 2025-08-06T21:49:35.547Z>
+
+## 3. Core Exception Mapping Implementation [done]
+### Dependencies: 8.2
+### Description: Implement the core exception mapping logic within LangChainBackend methods using try-catch blocks. Preserve original exception context, stack traces, and metadata while ensuring minimal performance overhead (<1ms per exception).
+### Details:
+Develop code to catch LangChain exceptions and raise corresponding SDK exceptions. Implement exception chaining and context preservation. Optimize for performance and ensure compatibility with async/await patterns.
+
+## 4. Configuration System Integration [done]
+### Dependencies: 8.2
+### Description: Integrate the exception mapping layer with the existing configuration system. Support provider-specific exception behaviors and extensible mapping rules. Update config.py to include LangChain-specific error handling configurations.
+### Details:
+Extend configuration files and parsers to allow enabling/disabling or customizing exception mappings per provider. Ensure backward compatibility and ease of future extension.
+<info added on 2025-08-06T21:51:43.397Z>
+After analysis, no changes to the configuration system are required for LangChain exception mapping. The current AIConfig class and TOML-based configuration already fully support LangChain backends, and exception mapping is transparently handled within LangChainBackend._map_langchain_exception. No new configuration parameters or updates are necessary, as the integration is already complete through the existing architecture.
+</info added on 2025-08-06T21:51:43.397Z>
+
+## 5. Performance Monitoring & Logging [done]
+### Dependencies: 8.3, 8.4
+### Description: Implement comprehensive logging, metrics, and performance monitoring for the exception mapping layer. Add structured logging capturing both original and mapped exceptions. Provide debugging and troubleshooting capabilities.
+### Details:
+Integrate with existing logging frameworks to record exception details and mapping outcomes. Add metrics to monitor exception frequency and mapping latency. Provide tools or documentation for debugging mapped exceptions.
+
+## 6. Comprehensive Testing Suite [done]
+### Dependencies: 8.5
+### Description: Develop a full testing suite including unit tests (mocking LangChain exceptions), integration tests (simulating actual provider failures), regression tests (verifying existing behavior preservation), performance tests (measuring overhead), and property-based tests (ensuring mapping consistency). Include edge cases and error message format validation.
+### Details:
+Write tests covering all mapped exceptions and provider-specific scenarios. Validate that exception messages and codes remain consistent. Measure and assert performance targets. Use mocks and real provider failures where feasible.
+
+## 7. Documentation & Maintenance Guidelines [done]
+### Dependencies: 8.6
+### Description: Create developer documentation, troubleshooting runbooks, and maintenance procedures. Document mapping strategies, debugging scenarios, and guidelines for extending the exception mapping layer.
+### Details:
+Produce clear and comprehensive documentation for developers and maintainers. Include examples of exception mappings, instructions for adding new provider exceptions, and troubleshooting tips.

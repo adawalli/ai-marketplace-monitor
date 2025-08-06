@@ -9,3 +9,43 @@ Modify caching logic to accept AIResponse objects produced by the adapter layer.
 
 # Test Strategy:
 Run integration tests with cached responses to verify cache hits and misses behave identically to previous backend implementations.
+
+# Subtasks:
+## 1. Analyze Existing AIResponse Caching Architecture [pending]
+### Dependencies: None
+### Description: Review the current caching implementation for AIResponse objects in the codebase to understand cache key generation, storage mechanisms, and serialization/deserialization processes. Identify any LangChain-specific caching requirements or constraints.
+### Details:
+Examine source code modules responsible for caching AIResponse objects. Document how cache keys are derived (e.g., hashing inputs), how responses are serialized for storage, and how deserialization is handled on retrieval. Investigate if any LangChain caching patterns or interfaces are currently used or need to be supported.
+<info added on 2025-08-06T23:01:04.478Z>
+Add explicit dependency on completion of Task 7, as the response adapter must be finalized before this analysis. Update scope to focus on the adapt_langchain_response() function, ensuring its integration with the caching layer is thoroughly examined. Analyze the cache key structure to validate inclusion and correct handling of new metadata fields. Review asdict() serialization behavior, specifically for dict-type metadata fields, to ensure proper storage and retrieval. Pay particular attention to usage_metadata and response_metadata dict fields, confirming their correct serialization, deserialization, and participation in cache key generation and validation.
+</info added on 2025-08-06T23:01:04.478Z>
+
+## 2. Integrate LangChainResponseAdapter with Cache Layer [pending]
+### Dependencies: 9.1
+### Description: Modify caching logic to accept AIResponse objects produced by LangChainResponseAdapter, ensuring compatibility with cache storage and retrieval. Preserve token usage tracking and LangChain-specific metadata within cached responses.
+### Details:
+Update cache input/output interfaces to handle adapted AIResponse objects. Verify that all relevant metadata, including token usage and LangChain-specific fields, are correctly serialized and deserialized. Implement any necessary adapter methods or serialization hooks to maintain cache integrity.
+<info added on 2025-08-06T23:01:10.587Z>
+Ensure backward compatibility by supporting deserialization of existing cached responses that lack new metadata fields, with appropriate default handling. Validate that cache key generation remains consistent across both legacy and LangChainBackend implementations to prevent cache fragmentation. Implement robust serialization and deserialization logic for usage_metadata and response_metadata dictionaries, ensuring all nested structures are preserved. Add provider-specific handling for metadata structures, accommodating differences between OpenAI, Anthropic, and DeepSeek responses. Incorporate error handling for cache deserialization failures, especially when encountering new or missing metadata fields, and log or gracefully recover from such errors to maintain cache reliability.
+</info added on 2025-08-06T23:01:10.587Z>
+
+## 3. Validate Cache Behavior and Run Integration Tests [pending]
+### Dependencies: 9.2
+### Description: Develop and execute comprehensive tests covering cache hit and miss scenarios, cache invalidation, serialization format consistency across backends, and performance benchmarks to confirm caching effectiveness with LangChainBackend.
+### Details:
+Write integration tests simulating LangChainBackend responses to verify cache retrieval correctness and fallback behavior. Test cache invalidation triggers and ensure backward compatibility with existing cached data. Measure response times with and without cache to validate performance improvements.
+<info added on 2025-08-06T23:01:19.382Z>
+Expand integration tests to include provider-specific metadata validation for OpenAI, Anthropic, and DeepSeek responses. Implement performance regression tests focusing on cache serialization/deserialization speed with the inclusion of new metadata fields. Add tests to ensure token usage information is accurately preserved through cache storage and retrieval cycles. Develop cross-provider cache compatibility tests, verifying that responses cached from one provider can be retrieved and interpreted correctly by another. Include cache migration tests to validate correct handling and retrieval when both old and new cache formats coexist. Introduce targeted performance benchmarks to ensure cache operations, including serialization and deserialization, do not introduce significant latency compared to previous implementations. Update the overall test strategy to explicitly cover these new test cases, ensuring comprehensive coverage of provider metadata, token usage, cross-provider compatibility, cache migration, and performance.
+</info added on 2025-08-06T23:01:19.382Z>
+
+## 4. Validate Metadata Serialization Compatibility [pending]
+### Dependencies: 9.1
+### Description: Test that usage_metadata and response_metadata dict fields serialize/deserialize correctly with diskcache across all supported LangChain providers
+### Details:
+Create comprehensive test cases validating metadata serialization with various structures from different providers (OpenAI, Anthropic, DeepSeek). Ensure asdict() handles nested dict metadata properly. Verify cache storage and retrieval maintains fidelity of all token usage and metadata information.
+
+## 5. Implement Cache Migration Strategy [pending]
+### Dependencies: 9.4
+### Description: Implement graceful handling of existing cached AIResponse objects that lack new metadata fields
+### Details:
+Create migration logic to handle existing cached responses without usage_metadata and response_metadata fields. Implement default value population and backward compatibility layers. Ensure cache operations don't fail when encountering legacy cached data.
