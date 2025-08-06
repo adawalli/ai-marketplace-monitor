@@ -358,21 +358,113 @@
           3,
           5
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement OpenRouter Provider Mapping in LangChainBackend",
+            "description": "Add OpenRouter as a new provider in the provider_map dictionary using ChatOpenAI with custom base_url and headers. Support model format 'provider/model' and ensure compatibility with existing provider interface.",
+            "dependencies": [],
+            "details": "Use ChatOpenAI with base_url='https://openrouter.ai/api/v1' and headers {'HTTP-Referer': 'https://ai-marketplace-monitor', 'X-Title': 'AI Marketplace Monitor'}. Parse model strings like 'anthropic/claude-3-sonnet' to set model parameter. Follow existing LangChain integration patterns.\n<info added on 2025-08-06T21:02:26.133Z>\nVerify that the existing _create_openrouter_model() function and provider mapping in ai.py meet all integration requirements. Implement validation to ensure model names follow the 'provider/model' format (e.g., 'anthropic/claude-3-sonnet'), returning clear error messages if invalid. Improve error handling for OpenRouter-specific failures with descriptive messages. Validate that timeout and retry configurations are correctly parsed and applied. Confirm that the required headers {'HTTP-Referer': 'https://ai-marketplace-monitor', 'X-Title': 'AI Marketplace Monitor'} are always set on OpenRouter requests. Update documentation and add or revise unit tests to cover these enhancements.\n</info added on 2025-08-06T21:02:26.133Z>\n<info added on 2025-08-06T21:16:45.965Z>\nReview confirms OpenRouter provider is already implemented in ai.py with correct enum, provider mapping, model creation function, and API key validation. Next, ensure explicit validation exists for model names to match the 'provider/model' pattern (e.g., 'anthropic/claude-3-sonnet'), returning clear error messages for invalid formats. Additionally, enhance error handling in OpenRouter integration to provide descriptive feedback for provider-specific failures, as outlined in the task requirements.\n</info added on 2025-08-06T21:16:45.965Z>\n<info added on 2025-08-06T21:19:58.081Z>\nAll OpenRouter provider mapping requirements have been fully implemented:\n\n- Model name validation enforces the 'provider/model' format with clear error messages for invalid patterns.\n- API key validation ensures keys start with 'sk-or-' and provides descriptive feedback for invalid keys.\n- Error handling has been enhanced to map and report OpenRouter-specific failures with detailed messages.\n- Integration with _validate_config_compatibility() ensures OpenRouter-specific validation is consistently applied.\n- The _map_langchain_exception() function now includes OpenRouter error pattern recognition and mapping.\n- Timeout and retry configurations are validated and correctly applied to OpenRouter requests.\n- Required headers are always set on OpenRouter API calls.\n- Comprehensive unit tests (15+) have been added to test_ai.py and test_langchain_validation.py, covering all validation and error handling scenarios.\n\nTask 6.1 is now complete and ready for further testing.\n</info added on 2025-08-06T21:19:58.081Z>",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Update Configuration Parser to Support OpenRouter Provider",
+            "description": "Modify the TOML config parser to accept 'openrouter' as a valid provider type. Support OpenRouter-specific model naming conventions and validate presence and format of OpenRouter API keys.",
+            "dependencies": [
+              "6.1"
+            ],
+            "details": "Ensure backward compatibility with existing configs. Validate API key format to start with 'sk-or-'. Update config schema and parsing logic to handle new provider and model formats.\n<info added on 2025-08-06T21:02:33.197Z>\nEnhance configuration validation for OpenRouter by implementing the following:\n\n- Add explicit API key format validation to ensure OpenRouter keys start with 'sk-or-'.\n- Implement model name validation to enforce the 'provider/model' pattern for OpenRouter models.\n- Integrate these validations into the _validate_config_compatibility() method (ai.py lines 595-615).\n- Extend _validate_mixed_configuration() (ai.py lines 726-738) to properly handle OpenRouter-specific validation cases.\n- Maintain backward compatibility with existing configurations throughout these enhancements.\n</info added on 2025-08-06T21:02:33.197Z>\n<info added on 2025-08-06T21:21:11.228Z>\nAll configuration parser requirements for OpenRouter support have been fully implemented and verified:\n\n- 'openrouter' is included in supported_ai_backends and accepted by the TOML config parser.\n- API key and model name validation for OpenRouter is enforced via _validate_config_compatibility().\n- Mixed configuration handling and backward compatibility are maintained.\n- Validation logic is delegated to LangChainBackend.get_config(), ensuring consistent enforcement during config parsing.\n\nNo further action is required for this subtask; all objectives have been met through the implementation work completed in 6.1. Task 6.2 can be marked as complete.\n</info added on 2025-08-06T21:21:11.228Z>",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement API Key Validation and Error Handling for OpenRouter",
+            "description": "Add validation logic for OpenRouter API keys and models. Handle errors such as invalid keys, unsupported models, rate limiting, and quota issues with clear error messages.",
+            "dependencies": [
+              "6.1",
+              "6.2"
+            ],
+            "details": "Check API key format (must start with 'sk-or-'). Implement model availability checks. Integrate error handling consistent with existing backend patterns. Provide user-friendly error messages for common failure cases.\n<info added on 2025-08-06T21:02:43.188Z>\nEnhance error handling to include OpenRouter-specific logic by updating the _map_langchain_exception() method (lines 648-681 in ai.py) to map OpenRouter error responses to clear, actionable error messages. Implement detection and handling of quota exceeded and rate limiting errors returned by the OpenRouter API, ensuring users receive precise feedback when limits are reached. Validate model availability with explicit error messages if a requested model is not supported or unavailable via OpenRouter. Provide user-friendly troubleshooting guidance for common OpenRouter integration issues, such as invalid API keys, misconfigured headers, or unsupported models. Ensure all OpenRouter-specific HTTP error codes and response formats are parsed and surfaced to users with consistent, helpful messaging.\n</info added on 2025-08-06T21:02:43.188Z>\n<info added on 2025-08-06T21:21:29.238Z>\nAll API key validation and error handling requirements for OpenRouter are fully implemented. This includes API key format validation in both _create_openrouter_model() and _validate_config_compatibility(), OpenRouter-specific error mapping in _map_langchain_exception() with actionable messages and relevant documentation links, explicit model availability checks, and integrated troubleshooting guidance. Comprehensive test coverage (10 new tests) ensures all error scenarios are handled consistently with backend patterns, and all HTTP error codes and OpenRouter response formats are parsed and surfaced with clear, helpful messaging. Task 6.3 requirements are complete.\n</info added on 2025-08-06T21:21:29.238Z>",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Develop Unit and Integration Tests for OpenRouter Provider",
+            "description": "Write comprehensive tests covering OpenRouter provider instantiation, config parsing, API key validation, error handling, and simulated API responses. Include integration tests with LangChainBackend.",
+            "dependencies": [
+              "6.1",
+              "6.2",
+              "6.3"
+            ],
+            "details": "Mock OpenRouter API responses to test provider behavior. Validate config parser accepts and rejects inputs correctly. Test error handling for invalid keys and unsupported models. Ensure seamless integration with existing AI backend.\n<info added on 2025-08-06T21:02:55.271Z>\nExpand the test suite to include:\n- Backward compatibility tests for OpenRouter provider, following patterns established in test_backward_compatibility.py to ensure legacy configurations and behaviors remain supported.\n- Concurrent access tests simulating multiple simultaneous requests to the OpenRouter provider, mirroring approaches used for LangChainBackend to validate thread safety and correct resource handling.\n- Configuration migration scenario tests to verify correct behavior when upgrading or changing configuration formats, ensuring smooth transitions and no regressions.\n- Integration tests with the marketplace evaluation workflow, confirming OpenRouter provider compatibility and correct operation within end-to-end user flows.\n- Enhanced validation tests for API key formats and model name formats, including edge cases and invalid input scenarios.\n- Expanded mocking of OpenRouter API responses to cover a wide range of error scenarios, such as rate limiting, malformed responses, and provider-specific error codes.\n- Detailed tests for OpenRouter-specific error handling and error mapping, ensuring all error conditions are surfaced and mapped consistently with other providers.\n- Update and expand configuration documentation to reflect new test cases, migration scenarios, and validation requirements.\n</info added on 2025-08-06T21:02:55.271Z>",
+            "status": "done",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 7,
         "title": "Create Response Adapter Layer",
-        "description": "Develop adapter to convert LangChain response objects into existing AIResponse format to maintain cache compatibility and API consistency.",
-        "details": "Implement adapter functions or classes that take LangChain chat model responses and produce AIResponse objects identical in structure and serialization to existing ones. Handle token usage, message content, and metadata. Ensure serialization/deserialization compatibility with existing cache system.",
-        "testStrategy": "Test adapter with mocked LangChain responses and verify output matches expected AIResponse objects. Test cache serialization round-trip with adapted responses.",
-        "priority": "high",
+        "description": "Develop adapter to convert LangChain response objects into existing AIResponse format to maintain cache compatibility and API consistency. Enhance AIResponse to include token usage tracking and preserve all relevant metadata from LangChain responses.",
+        "status": "done",
         "dependencies": [
           4
         ],
-        "status": "pending",
-        "subtasks": []
+        "priority": "high",
+        "details": "Implement adapter functions or classes that take LangChain chat model responses and produce AIResponse objects identical in structure and serialization to existing ones, but now extended to include token usage (for cost monitoring), usage_metadata (token counts), response_metadata (model info), and any other rich information present in LangChain responses. Ensure that the adapter extracts and maps all relevant fields, not just message content. Update AIResponse as needed to support these new fields while maintaining backward and cache compatibility. Ensure serialization/deserialization compatibility with the existing cache system.",
+        "testStrategy": "Test adapter with mocked LangChain responses containing message content, token usage, and metadata. Verify that the output AIResponse objects include all expected fields and match the extended format. Test cache serialization round-trip with adapted responses to ensure compatibility. Add tests to confirm that cost monitoring fields (token usage) are accurately tracked and preserved.",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Analyze LangChain response structure for all relevant metadata",
+            "description": "Review LangChain chat model response objects to identify all available metadata fields, including token usage, model info, and any other relevant data needed for AIResponse.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Extend AIResponse to support token usage and metadata fields",
+            "description": "Update the AIResponse class to include fields for token usage (prompt, completion, total), usage_metadata, and response_metadata. Ensure backward compatibility and cache serialization compatibility.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement adapter to map LangChain responses to extended AIResponse",
+            "description": "Develop adapter logic that extracts message content, token usage, and all relevant metadata from LangChain responses and constructs an AIResponse object with the new fields.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Test adapter with mocked LangChain responses including metadata",
+            "description": "Write tests using mocked LangChain responses that include token usage and metadata. Verify that the adapted AIResponse objects contain all expected fields and values.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Validate cache serialization/deserialization with extended AIResponse",
+            "description": "Ensure that AIResponse objects with new metadata fields can be serialized and deserialized with the existing cache system without errors or data loss.",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 8,
@@ -384,8 +476,85 @@
         "dependencies": [
           4
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Exception Hierarchy Analysis & Mapping Strategy",
+            "description": "Research and document LangChain's complete exception hierarchy, including provider-specific exceptions (OpenAI, Anthropic, etc.). Develop a detailed mapping strategy to existing SDK exceptions, covering exception chains, nested exceptions, and provider-specific behaviors with rationale.",
+            "dependencies": [],
+            "details": "Analyze LangChain core and provider-specific exceptions from official docs and source code. Identify all relevant exception types and their relationships. Document how each LangChain exception maps to existing SDK exceptions, preserving error semantics and context.\n<info added on 2025-08-06T21:48:38.889Z>\nExpand the mapping logic in _map_langchain_exception to cover additional LangChain-specific exceptions identified during research. Ensure that new mappings align with established codebase patterns: use ValueError for configuration or input validation errors, RuntimeError for service or provider failures, and FileNotFoundError for missing resource scenarios. Document any new exception types added to the mapping, along with rationale for their corresponding SDK exception choices. Review and update exception mapping to handle nested or chained exceptions where applicable, preserving original error context and messages.\n</info added on 2025-08-06T21:48:38.889Z>\n<info added on 2025-08-06T21:49:23.826Z>\nException hierarchy analysis is complete. Key findings:\n\n- LangChain core exceptions include LangChainException (base), OutputParserException, and TracerException.\n- Provider-specific exceptions primarily wrap underlying client errors (e.g., OpenAI: APIConnectionError, APIError, APITimeoutError, AuthenticationError, BadRequestError, RateLimitError).\n- Provider modules generally do not define their own exception classes.\n- The current _map_langchain_exception implementation already covers common patterns.\n- Mapping strategy will extend _map_langchain_exception to comprehensively handle all identified LangChain-specific and wrapped provider exceptions, preserving exception chaining using 'from e' syntax.\n- All mappings will adhere to established codebase patterns: ValueError for configuration/input validation, RuntimeError for service/provider failures, and FileNotFoundError for missing resources.\n- Backward compatibility with existing error handling will be maintained.\n</info added on 2025-08-06T21:49:23.826Z>",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Exception Mapping Architecture Design",
+            "description": "Design the architecture for the exception mapping layer, ensuring context preservation, structured logging integration, and provider-specific handling. Address async exception handling and define integration points within LangChainBackend.",
+            "dependencies": [
+              "8.1"
+            ],
+            "details": "Create design documents and diagrams illustrating the mapping layer. Specify how exceptions will be caught, transformed, and re-raised. Define interfaces for provider-specific behaviors and how async exceptions are handled. Plan integration with logging and monitoring.\n<info added on 2025-08-06T21:49:35.547Z>\nThe architecture design will build upon the existing _map_langchain_exception method (ai.py, lines 948-1059), which already addresses basic exception mapping, OpenRouter-specific errors, connection and timeout handling, and configuration validation errors. The new design will extend this method to provide comprehensive LangChain exception support, ensuring backward compatibility. Enhancements will include modularizing provider-specific mappings, expanding coverage for new LangChain exception types, and integrating structured logging and monitoring at each mapping point. The design will also specify how to preserve context and error metadata during transformation, and outline strategies for seamless async exception handling within the updated mapping layer.\n</info added on 2025-08-06T21:49:35.547Z>",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Core Exception Mapping Implementation",
+            "description": "Implement the core exception mapping logic within LangChainBackend methods using try-catch blocks. Preserve original exception context, stack traces, and metadata while ensuring minimal performance overhead (<1ms per exception).",
+            "dependencies": [
+              "8.2"
+            ],
+            "details": "Develop code to catch LangChain exceptions and raise corresponding SDK exceptions. Implement exception chaining and context preservation. Optimize for performance and ensure compatibility with async/await patterns.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Configuration System Integration",
+            "description": "Integrate the exception mapping layer with the existing configuration system. Support provider-specific exception behaviors and extensible mapping rules. Update config.py to include LangChain-specific error handling configurations.",
+            "dependencies": [
+              "8.2"
+            ],
+            "details": "Extend configuration files and parsers to allow enabling/disabling or customizing exception mappings per provider. Ensure backward compatibility and ease of future extension.\n<info added on 2025-08-06T21:51:43.397Z>\nAfter analysis, no changes to the configuration system are required for LangChain exception mapping. The current AIConfig class and TOML-based configuration already fully support LangChain backends, and exception mapping is transparently handled within LangChainBackend._map_langchain_exception. No new configuration parameters or updates are necessary, as the integration is already complete through the existing architecture.\n</info added on 2025-08-06T21:51:43.397Z>",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Performance Monitoring & Logging",
+            "description": "Implement comprehensive logging, metrics, and performance monitoring for the exception mapping layer. Add structured logging capturing both original and mapped exceptions. Provide debugging and troubleshooting capabilities.",
+            "dependencies": [
+              "8.3",
+              "8.4"
+            ],
+            "details": "Integrate with existing logging frameworks to record exception details and mapping outcomes. Add metrics to monitor exception frequency and mapping latency. Provide tools or documentation for debugging mapped exceptions.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Comprehensive Testing Suite",
+            "description": "Develop a full testing suite including unit tests (mocking LangChain exceptions), integration tests (simulating actual provider failures), regression tests (verifying existing behavior preservation), performance tests (measuring overhead), and property-based tests (ensuring mapping consistency). Include edge cases and error message format validation.",
+            "dependencies": [
+              "8.5"
+            ],
+            "details": "Write tests covering all mapped exceptions and provider-specific scenarios. Validate that exception messages and codes remain consistent. Measure and assert performance targets. Use mocks and real provider failures where feasible.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 7,
+            "title": "Documentation & Maintenance Guidelines",
+            "description": "Create developer documentation, troubleshooting runbooks, and maintenance procedures. Document mapping strategies, debugging scenarios, and guidelines for extending the exception mapping layer.",
+            "dependencies": [
+              "8.6"
+            ],
+            "details": "Produce clear and comprehensive documentation for developers and maintainers. Include examples of exception mappings, instructions for adding new provider exceptions, and troubleshooting tips.",
+            "status": "done",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 9,
@@ -450,7 +619,7 @@
     ],
     "metadata": {
       "created": "2025-08-06T00:33:31.026Z",
-      "updated": "2025-08-06T20:00:53.746Z",
+      "updated": "2025-08-06T22:05:12.614Z",
       "description": "Tasks for master context"
     }
   }

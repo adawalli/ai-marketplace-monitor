@@ -946,24 +946,172 @@ class LangChainBackend(AIBackend[AIConfig]):
             raise RuntimeError("Thread synchronization lock is in an invalid state") from e
 
     def _map_langchain_exception(self, e: Exception, context: str = "") -> Exception:
-        """Map LangChain exceptions to existing error patterns for backward compatibility."""
+        """Map LangChain exceptions to existing error patterns for backward compatibility.
+
+        This method provides a comprehensive mapping layer that transforms LangChain and
+        provider-specific exceptions into standardized SDK exceptions. It preserves
+        exception chaining, adds contextual information, and includes performance monitoring.
+
+        Exception Mapping Strategy:
+        - LangChain core exceptions → RuntimeError (LangChainException, TracerException)
+                                    or ValueError (OutputParserException)
+        - Provider exceptions (OpenAI, etc.) → ValueError (auth/config) or RuntimeError (service)
+        - Import/dependency errors → RuntimeError with installation guidance
+        - Unknown exceptions → RuntimeError with fallback message
+
+        Args:
+            e: The original exception to map
+            context: Contextual information about where the exception occurred
+
+        Returns:
+            Exception: Mapped exception with preserved cause chain and context
+
+        Raises:
+            The mapped exception type based on the original exception pattern
+
+        Performance:
+        - Target: <1ms per exception mapping
+        - Includes structured logging with timing metrics
+        - Exception chaining preserves original stack traces
+
+        Maintenance Notes:
+        - Add new provider exceptions to Stage 2 (Provider-specific mapping)
+        - Follow existing patterns: ValueError for config/input, RuntimeError for service
+        - Always preserve exception chaining with __cause__ attribute
+        - Update tests in test_langchain_validation.py when adding new mappings
+        """
+        import time
+
+        start_time = time.perf_counter()
         error_msg = str(e)
         context_prefix = f"{context}: " if context else ""
+        exception_type = type(e).__name__
 
-        # Map common LangChain exceptions to existing patterns
+        # Helper function to log mapping outcome and return mapped exception
+        # This ensures consistent exception chaining and performance logging across all mapping paths
+        def _return_mapped_exception(
+            mapped_exc: Exception, mapping_type: str = "standard"
+        ) -> Exception:
+            # Preserve original exception as cause for debugging and stack trace analysis
+            mapped_exc.__cause__ = e
+            elapsed_time = time.perf_counter() - start_time
+            mapped_type = type(mapped_exc).__name__
+
+            # Log successful mapping with timing for performance monitoring
+            if self.logger:
+                self.logger.debug(
+                    f"""{hilight("[Exception-Mapping]", "succ")} Mapped {hilight(exception_type)} """
+                    f"""to {hilight(mapped_type)} via {mapping_type} in {elapsed_time*1000:.2f}ms"""
+                )
+            return mapped_exc
+
+        # Import LangChain exceptions for isinstance checks
+        try:
+            from langchain_core.exceptions import (
+                LangChainException,
+                OutputParserException,
+                TracerException,
+            )
+        except ImportError:
+            # Fallback if LangChain not available - create dummy exception classes
+            # that will never match any actual exception instances
+            LangChainException = type("_FakeLangChainException", (), {})  # noqa: N806
+            OutputParserException = type("_FakeOutputParserException", (), {})  # noqa: N806
+            TracerException = type("_FakeTracerException", (), {})  # noqa: N806
+
+        # Log original exception for debugging
+        if self.logger:
+            self.logger.debug(
+                f"""{hilight("[Exception-Mapping]", "info")} Mapping {hilight(exception_type)} """
+                f"""from {hilight(context or "unknown context", "name")}: {error_msg[:100]}"""
+            )
+
+        # ==================== STAGE 1: CORE LANGCHAIN EXCEPTION MAPPING ====================
+        # Map LangChain's own exception hierarchy to appropriate SDK exceptions.
+        # These are framework-level errors from LangChain components (chains, parsers, tracers).
+
+        if isinstance(e, LangChainException):
+            mapped_exc = RuntimeError(f"{context_prefix}LangChain operation failed: {error_msg}")
+            return _return_mapped_exception(mapped_exc, "LangChain-core")
+
+        if isinstance(e, OutputParserException):
+            mapped_exc = ValueError(
+                f"{context_prefix}AI response parsing failed: {error_msg}. "
+                "The model response format was unexpected or malformed."
+            )
+            return _return_mapped_exception(mapped_exc, "LangChain-parser")
+
+        if isinstance(e, TracerException):
+            mapped_exc = RuntimeError(f"{context_prefix}LangChain tracing error: {error_msg}")
+            return _return_mapped_exception(mapped_exc, "LangChain-tracer")
+
+        # ==================== STAGE 2: PROVIDER-SPECIFIC EXCEPTION MAPPING ====================
+        # Map exceptions from underlying AI providers (OpenAI, Anthropic, etc.) that are wrapped by LangChain.
+        # These are API-level errors from the actual model providers.
+
+        exception_name = type(e).__name__
+
+        # OpenAI API exceptions (most common provider)
+        if exception_name in ["APIConnectionError", "APITimeoutError"]:
+            mapped_exc = RuntimeError(
+                f"{context_prefix}Connection failed: {error_msg}. "
+                "Check network connectivity and service availability."
+            )
+            return _return_mapped_exception(mapped_exc, "provider-connection")
+
+        if exception_name == "AuthenticationError":
+            mapped_exc = ValueError(
+                f"{context_prefix}Authentication error: {error_msg}. Check API key configuration."
+            )
+            return _return_mapped_exception(mapped_exc, "provider-auth")
+
+        if exception_name == "RateLimitError":
+            mapped_exc = RuntimeError(
+                f"{context_prefix}Rate limit exceeded: {error_msg}. "
+                "Try again later or upgrade your plan."
+            )
+            return _return_mapped_exception(mapped_exc, "provider-rate-limit")
+
+        if exception_name == "BadRequestError":
+            mapped_exc = ValueError(
+                f"{context_prefix}Invalid request: {error_msg}. "
+                "Check model parameters and input format."
+            )
+            return _return_mapped_exception(mapped_exc, "provider-bad-request")
+
+        if exception_name in ["NotFoundError", "PermissionDeniedError"]:
+            mapped_exc = ValueError(
+                f"{context_prefix}Resource access error: {error_msg}. "
+                "Check model availability and permissions."
+            )
+            return _return_mapped_exception(mapped_exc, "provider-access-denied")
+
+        if exception_name == "InternalServerError":
+            mapped_exc = RuntimeError(
+                f"{context_prefix}Provider service error: {error_msg}. "
+                "Try again later or contact provider support."
+            )
+            return _return_mapped_exception(mapped_exc, "provider-internal-error")
+
+        # ==================== STAGE 3: GENERIC LANGCHAIN PATTERNS ====================
+        # Handle common Python exceptions that occur in LangChain context.
+        # These are typically environment or configuration issues.
+
         if isinstance(e, ImportError):
-            return RuntimeError(
+            mapped_exc = RuntimeError(
                 f"{context_prefix}Provider dependencies not installed: {error_msg}. "
                 "Install the required LangChain packages."
             )
+            return _return_mapped_exception(mapped_exc, "import-error")
 
         if isinstance(e, (ValueError, TypeError)) and any(
             pattern in error_msg.lower()
             for pattern in ["api_key", "authentication", "unauthorized"]
         ):
-            return ValueError(
+            mapped_exc = ValueError(
                 f"{context_prefix}Authentication error: {error_msg}. Check API key configuration."
             )
+            return _return_mapped_exception(mapped_exc, "generic-auth-error")
 
         # OpenRouter-specific error handling
         if isinstance(e, ValueError) and "openrouter" in error_msg.lower():
@@ -1055,8 +1203,12 @@ class LangChainBackend(AIBackend[AIConfig]):
                 "Check model name and availability."
             )
 
-        # For unknown exceptions, wrap in RuntimeError with context
-        return RuntimeError(f"{context_prefix}Unexpected error: {error_msg}")
+        # ==================== STAGE 4: FALLBACK EXCEPTION MAPPING ====================
+        # Handle any exception not caught by previous stages.
+        # This ensures all exceptions are consistently wrapped and logged.
+
+        mapped_exc = RuntimeError(f"{context_prefix}Unexpected error: {error_msg}")
+        return _return_mapped_exception(mapped_exc, "fallback")
 
     def _validate_mixed_configuration(self, config: AIConfig) -> List[str]:
         """Handle mixed old/new configuration scenarios gracefully.

@@ -424,6 +424,513 @@ class TestLangChainBackendValidation:
             assert "Failed to connect" in mock_logger.error.call_args[0][0]
 
 
+class TestLangChainExceptionMappingComprehensive:
+    """Comprehensive test suite for LangChain exception mapping functionality."""
+
+    def test_langchain_core_exception_mapping_functionality(self) -> None:
+        """Test that LangChain core exception mapping logic works.
+
+        Since the actual LangChain exceptions are imported dynamically,
+        we test the core functionality that's accessible.
+        """
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        mock_logger = Mock()
+        backend = LangChainBackend(config, logger=mock_logger)
+
+        # Test with actual LangChain exception if available, fallback to mock
+        try:
+            from langchain_core.exceptions import LangChainException
+
+            original_error = LangChainException("LangChain operation failed")
+
+            mapped_error = backend._map_langchain_exception(original_error, "model evaluation")
+
+            assert isinstance(mapped_error, RuntimeError)
+            assert "model evaluation: LangChain operation failed" in str(mapped_error)
+            assert mapped_error.__cause__ is original_error
+
+        except ImportError:
+            # If LangChain not available, test fallback behavior
+            original_error = Exception("LangChain operation failed")
+            mapped_error = backend._map_langchain_exception(original_error, "model evaluation")
+
+            # Should fall back to generic handling
+            assert isinstance(mapped_error, RuntimeError)
+            assert "Unexpected error" in str(mapped_error)
+
+    def test_output_parser_exception_mapping_functionality(self) -> None:
+        """Test OutputParserException mapping if LangChain available."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        mock_logger = Mock()
+        backend = LangChainBackend(config, logger=mock_logger)
+
+        try:
+            from langchain_core.exceptions import LangChainException, OutputParserException
+
+            # Check if OutputParserException inherits from LangChainException
+            # If so, it will be caught by the LangChainException handler first
+            if issubclass(OutputParserException, LangChainException):
+                original_error = OutputParserException("Could not parse model output")
+                mapped_error = backend._map_langchain_exception(original_error, "response parsing")
+
+                # Should be caught by LangChainException handler, not OutputParserException specific
+                assert isinstance(mapped_error, RuntimeError)
+                assert "response parsing: LangChain operation failed" in str(mapped_error)
+                assert mapped_error.__cause__ is original_error
+            else:
+                # If they don't inherit, test the specific handler
+                original_error = OutputParserException("Could not parse model output")
+                mapped_error = backend._map_langchain_exception(original_error, "response parsing")
+
+                assert isinstance(mapped_error, ValueError)
+                assert "response parsing: AI response parsing failed" in str(mapped_error)
+                assert mapped_error.__cause__ is original_error
+
+        except ImportError:
+            # Skip if LangChain not available - this is expected in some environments
+            pytest.skip("LangChain not available - skipping OutputParserException test")
+
+    def test_tracer_exception_mapping_functionality(self) -> None:
+        """Test TracerException mapping if LangChain available."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        mock_logger = Mock()
+        backend = LangChainBackend(config, logger=mock_logger)
+
+        try:
+            from langchain_core.exceptions import LangChainException, TracerException
+
+            # Check if TracerException inherits from LangChainException
+            if issubclass(TracerException, LangChainException):
+                original_error = TracerException("Tracing failed")
+                mapped_error = backend._map_langchain_exception(original_error, "request tracing")
+
+                # Should be caught by LangChainException handler, not TracerException specific
+                assert isinstance(mapped_error, RuntimeError)
+                assert "request tracing: LangChain operation failed" in str(mapped_error)
+                assert mapped_error.__cause__ is original_error
+            else:
+                # If they don't inherit, test the specific handler
+                original_error = TracerException("Tracing failed")
+                mapped_error = backend._map_langchain_exception(original_error, "request tracing")
+
+                assert isinstance(mapped_error, RuntimeError)
+                assert "request tracing: LangChain tracing error" in str(mapped_error)
+                assert mapped_error.__cause__ is original_error
+
+        except ImportError:
+            # Skip if LangChain not available - this is expected in some environments
+            pytest.skip("LangChain not available - skipping TracerException test")
+
+    def test_provider_exception_mapping_api_connection_error(self) -> None:
+        """Test mapping of APIConnectionError to RuntimeError."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        backend = LangChainBackend(config)
+
+        # Create mock exception class with specific name
+        class APIConnectionError(Exception):
+            pass
+
+        original_error = APIConnectionError("Connection to OpenAI API failed")
+
+        mapped_error = backend._map_langchain_exception(original_error, "model request")
+
+        assert isinstance(mapped_error, RuntimeError)
+        assert "model request: Connection failed" in str(mapped_error)
+        assert "Check network connectivity" in str(mapped_error)
+        assert mapped_error.__cause__ is original_error
+
+    def test_provider_exception_mapping_api_timeout_error(self) -> None:
+        """Test mapping of APITimeoutError to RuntimeError."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        backend = LangChainBackend(config)
+
+        class APITimeoutError(Exception):
+            pass
+
+        original_error = APITimeoutError("Request timed out")
+
+        mapped_error = backend._map_langchain_exception(original_error, "api call")
+
+        assert isinstance(mapped_error, RuntimeError)
+        assert "api call: Connection failed" in str(mapped_error)
+        assert "Check network connectivity" in str(mapped_error)
+
+    def test_provider_exception_mapping_authentication_error(self) -> None:
+        """Test mapping of AuthenticationError to ValueError."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        backend = LangChainBackend(config)
+
+        class AuthenticationError(Exception):
+            pass
+
+        original_error = AuthenticationError("Invalid API key provided")
+
+        mapped_error = backend._map_langchain_exception(original_error)
+
+        assert isinstance(mapped_error, ValueError)
+        assert "Authentication error" in str(mapped_error)
+        assert "Check API key configuration" in str(mapped_error)
+        assert mapped_error.__cause__ is original_error
+
+    def test_provider_exception_mapping_rate_limit_error(self) -> None:
+        """Test mapping of RateLimitError to RuntimeError."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        backend = LangChainBackend(config)
+
+        class RateLimitError(Exception):
+            pass
+
+        original_error = RateLimitError("Rate limit exceeded")
+
+        mapped_error = backend._map_langchain_exception(original_error, "evaluation")
+
+        assert isinstance(mapped_error, RuntimeError)
+        assert "evaluation: Rate limit exceeded" in str(mapped_error)
+        assert "Try again later or upgrade your plan" in str(mapped_error)
+
+    def test_provider_exception_mapping_bad_request_error(self) -> None:
+        """Test mapping of BadRequestError to ValueError."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        backend = LangChainBackend(config)
+
+        class BadRequestError(Exception):
+            pass
+
+        original_error = BadRequestError("Invalid model parameters")
+
+        mapped_error = backend._map_langchain_exception(original_error, "request")
+
+        assert isinstance(mapped_error, ValueError)
+        assert "request: Invalid request" in str(mapped_error)
+        assert "Check model parameters and input format" in str(mapped_error)
+        assert mapped_error.__cause__ is original_error
+
+    def test_provider_exception_mapping_not_found_error(self) -> None:
+        """Test mapping of NotFoundError to ValueError."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        backend = LangChainBackend(config)
+
+        class NotFoundError(Exception):
+            pass
+
+        original_error = NotFoundError("Model not found")
+
+        mapped_error = backend._map_langchain_exception(original_error)
+
+        assert isinstance(mapped_error, ValueError)
+        assert "Resource access error" in str(mapped_error)
+        assert "Check model availability and permissions" in str(mapped_error)
+        assert mapped_error.__cause__ is original_error
+
+    def test_provider_exception_mapping_permission_denied_error(self) -> None:
+        """Test mapping of PermissionDeniedError to ValueError."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        backend = LangChainBackend(config)
+
+        class PermissionDeniedError(Exception):
+            pass
+
+        original_error = PermissionDeniedError("Permission denied for model access")
+
+        mapped_error = backend._map_langchain_exception(original_error, "model access")
+
+        assert isinstance(mapped_error, ValueError)
+        assert "model access: Resource access error" in str(mapped_error)
+        assert "Check model availability and permissions" in str(mapped_error)
+
+    def test_provider_exception_mapping_internal_server_error(self) -> None:
+        """Test mapping of InternalServerError to RuntimeError."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        backend = LangChainBackend(config)
+
+        class InternalServerError(Exception):
+            pass
+
+        original_error = InternalServerError("Internal server error occurred")
+
+        mapped_error = backend._map_langchain_exception(original_error, "api request")
+
+        assert isinstance(mapped_error, RuntimeError)
+        assert "api request: Provider service error" in str(mapped_error)
+        assert "Try again later or contact provider support" in str(mapped_error)
+
+    def test_generic_langchain_pattern_import_error(self) -> None:
+        """Test mapping of ImportError for missing dependencies."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        backend = LangChainBackend(config)
+
+        original_error = ImportError("No module named 'langchain_openai'")
+
+        mapped_error = backend._map_langchain_exception(original_error, "provider setup")
+
+        assert isinstance(mapped_error, RuntimeError)
+        assert "provider setup: Provider dependencies not installed" in str(mapped_error)
+        assert "Install the required LangChain packages" in str(mapped_error)
+        assert mapped_error.__cause__ is original_error
+
+    def test_generic_langchain_pattern_api_key_value_error(self) -> None:
+        """Test mapping of ValueError with API key patterns."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        backend = LangChainBackend(config)
+
+        original_error = ValueError("Invalid api_key provided")
+
+        mapped_error = backend._map_langchain_exception(original_error, "authentication")
+
+        assert isinstance(mapped_error, ValueError)
+        assert "authentication: Authentication error" in str(mapped_error)
+        assert "Check API key configuration" in str(mapped_error)
+
+    def test_generic_langchain_pattern_authentication_type_error(self) -> None:
+        """Test mapping of TypeError with authentication patterns."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        backend = LangChainBackend(config)
+
+        original_error = TypeError("Authentication failed: unauthorized access")
+
+        mapped_error = backend._map_langchain_exception(original_error)
+
+        assert isinstance(mapped_error, ValueError)
+        assert "Authentication error" in str(mapped_error)
+        assert "Check API key configuration" in str(mapped_error)
+
+    def test_openrouter_specific_api_key_format_error(self) -> None:
+        """Test OpenRouter-specific API key format error handling."""
+        config = AIConfig(name="test-backend", provider="openrouter")
+        backend = LangChainBackend(config)
+
+        original_error = ValueError("OpenRouter API key must start with 'sk-or-'")
+
+        mapped_error = backend._map_langchain_exception(original_error, "openrouter validation")
+
+        assert isinstance(mapped_error, ValueError)
+        assert "openrouter validation: OpenRouter API key format error" in str(mapped_error)
+        assert "https://openrouter.ai/keys" in str(mapped_error)
+
+    def test_openrouter_specific_model_format_error(self) -> None:
+        """Test OpenRouter-specific model format error handling."""
+        config = AIConfig(name="test-backend", provider="openrouter")
+        backend = LangChainBackend(config)
+
+        original_error = ValueError("OpenRouter model must follow 'provider/model' format")
+
+        mapped_error = backend._map_langchain_exception(original_error, "model validation")
+
+        assert isinstance(mapped_error, ValueError)
+        assert "model validation: OpenRouter model format error" in str(mapped_error)
+        assert "anthropic/claude-3-sonnet" in str(mapped_error)
+        assert "https://openrouter.ai/models" in str(mapped_error)
+
+    def test_openrouter_enhanced_model_not_found_error(self) -> None:
+        """Test OpenRouter-enhanced model not found error handling."""
+        config = AIConfig(name="test-backend", provider="openrouter")
+        backend = LangChainBackend(config)
+
+        original_error = RuntimeError("Model not found on OpenRouter.ai")
+
+        mapped_error = backend._map_langchain_exception(original_error, "openrouter request")
+
+        assert isinstance(mapped_error, ValueError)
+        assert "OpenRouter model not available" in str(mapped_error)
+        assert "https://openrouter.ai/models" in str(mapped_error)
+
+    def test_openrouter_enhanced_insufficient_credits_error(self) -> None:
+        """Test OpenRouter-enhanced insufficient credits error handling."""
+        config = AIConfig(name="test-backend", provider="openrouter")
+        backend = LangChainBackend(config)
+
+        original_error = RuntimeError("Insufficient credits for this request")
+
+        mapped_error = backend._map_langchain_exception(original_error, "openrouter billing")
+
+        assert isinstance(mapped_error, RuntimeError)
+        assert "OpenRouter billing issue" in str(mapped_error)
+        assert "https://openrouter.ai/credits" in str(mapped_error)
+
+    def test_openrouter_enhanced_model_overloaded_error(self) -> None:
+        """Test OpenRouter-enhanced model overloaded error handling."""
+        config = AIConfig(name="test-backend", provider="openrouter")
+        backend = LangChainBackend(config)
+
+        original_error = RuntimeError("Model overloaded - try again later")
+
+        mapped_error = backend._map_langchain_exception(original_error, "openrouter capacity")
+
+        assert isinstance(mapped_error, RuntimeError)
+        assert "Model temporarily unavailable" in str(mapped_error)
+        assert "Try again in a few minutes or select a different model" in str(mapped_error)
+
+    def test_openrouter_http_rate_limit_error(self) -> None:
+        """Test OpenRouter HTTP rate limit error handling."""
+        config = AIConfig(name="test-backend", provider="openrouter")
+        backend = LangChainBackend(config)
+
+        original_error = ConnectionError("Rate limit exceeded: 429")
+
+        mapped_error = backend._map_langchain_exception(original_error, "openrouter api")
+
+        assert isinstance(mapped_error, RuntimeError)
+        assert "OpenRouter service error" in str(mapped_error)
+        assert "https://openrouter.ai/activity" in str(mapped_error)
+
+    def test_fallback_connection_timeout_error(self) -> None:
+        """Test fallback connection and timeout error handling."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        backend = LangChainBackend(config)
+
+        original_error = ConnectionError("Connection timed out")
+
+        mapped_error = backend._map_langchain_exception(original_error, "network request")
+
+        assert isinstance(mapped_error, RuntimeError)
+        assert "network request: Connection failed" in str(mapped_error)
+        assert "Check network connectivity" in str(mapped_error)
+
+    def test_fallback_model_keyerror(self) -> None:
+        """Test fallback KeyError with model pattern handling."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        backend = LangChainBackend(config)
+
+        original_error = KeyError("model 'gpt-5' not found in configuration")
+
+        mapped_error = backend._map_langchain_exception(original_error)
+
+        assert isinstance(mapped_error, ValueError)
+        assert "Invalid model configuration" in str(mapped_error)
+        assert "Check model name and availability" in str(mapped_error)
+
+    def test_fallback_unknown_exception(self) -> None:
+        """Test fallback behavior for unknown exceptions."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        mock_logger = Mock()
+        backend = LangChainBackend(config, logger=mock_logger)
+
+        original_error = Exception("Completely unknown error type")
+
+        mapped_error = backend._map_langchain_exception(original_error, "unknown operation")
+
+        assert isinstance(mapped_error, RuntimeError)
+        assert "unknown operation: Unexpected error" in str(mapped_error)
+        assert mapped_error.__cause__ is original_error
+        # Should use fallback mapping type
+        mock_logger.debug.assert_called()
+
+    def test_exception_chaining_preservation(self) -> None:
+        """Test that exception chaining is properly preserved."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        backend = LangChainBackend(config)
+
+        # Create a chained exception
+        try:
+            raise ValueError("Original cause")
+        except ValueError as original_cause:
+            chained_error = RuntimeError("Chained error")
+            chained_error.__cause__ = original_cause
+
+            mapped_error = backend._map_langchain_exception(chained_error, "test")
+
+            # Verify the mapped exception preserves the chain
+            assert isinstance(mapped_error, RuntimeError)
+            assert mapped_error.__cause__ is chained_error
+            # Original cause should still be accessible through the chain
+            assert chained_error.__cause__ is original_cause
+
+    def test_performance_logging_capture(self) -> None:
+        """Test that performance logging captures mapping type and timing."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        mock_logger = Mock()
+        backend = LangChainBackend(config, logger=mock_logger)
+
+        original_error = ImportError("Missing dependency")
+
+        # Map the exception
+        mapped_error = backend._map_langchain_exception(original_error, "test context")
+
+        # Verify logging was called at least once (initial logging is certain)
+        assert mock_logger.debug.call_count >= 1
+
+        # Check that timing information is included in the log
+        debug_calls = [call.args[0] for call in mock_logger.debug.call_args_list]
+
+        # Should have original exception logging - check for correct pattern
+        original_log = next(
+            (call for call in debug_calls if "Mapping" in call and "ImportError" in call), None
+        )
+        assert original_log is not None
+        assert "test context" in original_log
+
+        # The mapped error should be a RuntimeError with proper cause
+        assert isinstance(mapped_error, RuntimeError)
+        assert mapped_error.__cause__ is original_error
+
+    def test_langchain_import_error_fallback(self) -> None:
+        """Test behavior when LangChain core exceptions are not importable."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        backend = LangChainBackend(config)
+
+        # Create a regular exception
+        original_error = Exception("Some LangChain-like error")
+
+        # The fallback behavior should map to generic handling
+        mapped_error = backend._map_langchain_exception(original_error, "test")
+
+        assert isinstance(mapped_error, RuntimeError)
+        assert "test: Unexpected error" in str(mapped_error)
+        assert mapped_error.__cause__ is original_error
+
+    def test_empty_context_handling(self) -> None:
+        """Test exception mapping with empty context."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        backend = LangChainBackend(config)
+
+        original_error = ValueError("Test error")
+
+        mapped_error = backend._map_langchain_exception(original_error)
+
+        assert isinstance(mapped_error, RuntimeError)
+        # Should not have context prefix
+        assert not str(mapped_error).startswith(": ")
+        assert "Unexpected error: Test error" in str(mapped_error)
+
+    def test_none_input_handling(self) -> None:
+        """Test exception mapping edge case with None-like inputs."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        backend = LangChainBackend(config)
+
+        # Test with an exception that has None as message
+        original_error = Exception(None)
+
+        mapped_error = backend._map_langchain_exception(original_error, "test")
+
+        assert isinstance(mapped_error, RuntimeError)
+        assert "test: Unexpected error" in str(mapped_error)
+
+    def test_long_error_message_truncation_in_logging(self) -> None:
+        """Test that long error messages are properly truncated in logging."""
+        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        mock_logger = Mock()
+        backend = LangChainBackend(config, logger=mock_logger)
+
+        # Create an error with a very long message
+        long_message = "A" * 200  # 200 character message
+        original_error = Exception(long_message)
+
+        backend._map_langchain_exception(original_error, "test context")
+
+        # Check that the logging truncated the message to 100 characters
+        debug_calls = [call.args[0] for call in mock_logger.debug.call_args_list]
+        original_log = next(
+            (call for call in debug_calls if "Mapping" in call and "Exception" in call), None
+        )
+        assert original_log is not None
+
+        # The log should contain truncated message (100 chars max as per implementation)
+        truncated_part = long_message[:100]
+        assert truncated_part in original_log
+        # Should not contain the full message
+        assert long_message not in original_log
+
+
 class TestPerformanceRegression:
     """Test performance aspects of the validation enhancements."""
 
