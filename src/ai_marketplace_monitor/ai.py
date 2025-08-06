@@ -1,5 +1,6 @@
 import os
 import re
+import threading
 import time
 from dataclasses import asdict, dataclass, field
 from enum import Enum
@@ -237,6 +238,44 @@ class AIBackend(Generic[TAIConfig]):
             self.logger.debug(f"""{hilight("[AI-Prompt]", "info")} {prompt}""")
         return prompt
 
+    def _parse_ai_response(self, answer: str, item_config: TItemConfig) -> AIResponse:
+        """Parse AI response text to extract rating and comment.
+
+        This method contains the common response parsing logic used by all backends.
+        """
+        if (
+            answer is None
+            or not answer.strip()
+            or re.search(r"Rating[^1-5]*[1-5]", answer, re.DOTALL) is None
+        ):
+            counter.increment(CounterItem.FAILED_AI_QUERY, item_config.name)
+            raise ValueError(f"Empty or invalid response from {self.config.name}: {answer}")
+
+        lines = answer.split("\n")
+        # Extract rating from response
+        score: int = 1
+        comment = ""
+        rating_line = None
+        for idx, line in enumerate(lines):
+            matched = re.match(r".*Rating[^1-5]*([1-5])[:\s]*(.*)", line)
+            if matched:
+                score = int(matched.group(1))
+                comment = matched.group(2).strip()
+                rating_line = idx
+                continue
+            if rating_line is not None:
+                # if the AI puts comment after Rating, we need to include them
+                comment += " " + line
+
+        # if the AI puts the rating at the end, let us try to use the line before the Rating line
+        if len(comment.strip()) < 5 and rating_line is not None and rating_line > 0:
+            comment = lines[rating_line - 1]
+
+        # remove multiple spaces, take first 30 words
+        comment = " ".join([x for x in comment.split() if x.strip()]).strip()
+        res = AIResponse(name=self.config.name, score=score, comment=comment)
+        return res
+
     def evaluate(
         self: "AIBackend",
         listing: Listing,
@@ -322,36 +361,7 @@ class OpenAIBackend(AIBackend):
             self.logger.debug(f"""{hilight("[AI-Response]", "info")} {pretty_repr(response)}""")
 
         answer = response.choices[0].message.content or ""
-        if (
-            answer is None
-            or not answer.strip()
-            or re.search(r"Rating[^1-5]*[1-5]", answer, re.DOTALL) is None
-        ):
-            counter.increment(CounterItem.FAILED_AI_QUERY, item_config.name)
-            raise ValueError(f"Empty or invalid response from {self.config.name}: {response}")
-
-        lines = answer.split("\n")
-        # if any of the lines contains "Rating: ", extract the rating from it.
-        score: int = 1
-        comment = ""
-        rating_line = None
-        for idx, line in enumerate(lines):
-            matched = re.match(r".*Rating[^1-5]*([1-5])[:\s]*(.*)", line)
-            if matched:
-                score = int(matched.group(1))
-                comment = matched.group(2).strip()
-                rating_line = idx
-                continue
-            if rating_line is not None:
-                # if the AI puts comment after Rating, we need to include them
-                comment += " " + line
-        # if the AI puts the rating at the end, let us try to use the line before the Rating line
-        if len(comment.strip()) < 5 and rating_line is not None and rating_line > 0:
-            comment = lines[rating_line - 1]
-
-        # remove multiple spaces, take first 30 words
-        comment = " ".join([x for x in comment.split() if x.strip()]).strip()
-        res = AIResponse(name=self.config.name, score=score, comment=comment)
+        res = self._parse_ai_response(answer, item_config)
         res.to_cache(listing, item_config, marketplace_config)
         counter.increment(CounterItem.NEW_AI_QUERY, item_config.name)
         return res
@@ -438,3 +448,186 @@ provider_map = {
     "ollama": _create_ollama_model,
     "openrouter": _create_openrouter_model,
 }
+
+
+class LangChainBackend(AIBackend[AIConfig]):
+    """Unified LangChain backend for AI providers using the provider mapping system.
+
+    This class is thread-safe. Multiple threads can safely call evaluate() and connect()
+    methods concurrently. Internal model state is protected by a reentrant lock.
+    """
+
+    def __init__(self, config: AIConfig, logger: Logger | None = None) -> None:
+        super().__init__(config, logger)
+        self._chat_model: BaseChatModel | None = None
+        self._model_lock = threading.RLock()  # Reentrant lock for thread safety
+
+    @classmethod
+    def get_config(cls: Type["LangChainBackend"], **kwargs: Any) -> AIConfig:
+        """Get configuration for the LangChain backend."""
+        return AIConfig(**kwargs)
+
+    def _get_model(self, config: AIConfig) -> BaseChatModel:
+        """Retrieve the appropriate LangChain chat model instance based on provider mapping."""
+        if not config.provider:
+            raise ValueError("AIConfig must have a provider specified")
+
+        provider_key = config.provider.lower()
+        if provider_key not in provider_map:
+            supported_providers = ", ".join(provider_map.keys())
+            raise ValueError(
+                f"Unsupported provider '{config.provider}'. "
+                f"Supported providers: {supported_providers}"
+            )
+
+        provider_factory = provider_map[provider_key]
+        try:
+            return provider_factory(config)
+        except KeyError as e:
+            raise ValueError(
+                f"Provider '{config.provider}' configuration is missing required field: {e}"
+            ) from e
+        except TypeError as e:
+            # Handle invalid parameter types or missing required parameters
+            raise ValueError(
+                f"Provider '{config.provider}' configuration error: {e}. "
+                f"Check API key, model name, and other required settings."
+            ) from e
+        except ImportError as e:
+            raise RuntimeError(
+                f"Provider '{config.provider}' dependencies not installed: {e}. "
+                f"Install the required LangChain packages."
+            ) from e
+        except ValueError as e:
+            # Re-raise ValueError with more context
+            raise ValueError(f"Provider '{config.provider}' configuration error: {e}") from e
+        except Exception as e:
+            # Preserve original exception details for debugging
+            error_msg = f"Failed to create model for provider '{config.provider}': {e}"
+            if hasattr(e, "__cause__") and e.__cause__:
+                error_msg += f" (caused by: {e.__cause__})"
+            raise RuntimeError(error_msg) from e
+
+    def connect(self) -> None:
+        """Establish connection and initialize the chat model."""
+        with self._model_lock:
+            if self._chat_model is None:
+                try:
+                    self._chat_model = self._get_model(self.config)
+                    if self.logger:
+                        self.logger.info(
+                            f"""{hilight("[AI]", "name")} {self.config.name} connected."""
+                        )
+                except Exception as e:
+                    if self.logger:
+                        self.logger.error(
+                            f"""{hilight("[AI-Error]", "fail")} Failed to connect {self.config.name}: {e}"""
+                        )
+                    raise
+
+    def _extract_response_content(self, response: Any) -> str:
+        """Extract content from LangChain response with proper type checking and fallbacks."""
+        # Handle different LangChain response types
+        if hasattr(response, "content"):
+            content = response.content
+            if isinstance(content, str):
+                return content
+            elif isinstance(content, list) and len(content) > 0:
+                # Some models return content as a list of message parts
+                return str(content[0]) if hasattr(content[0], "__str__") else str(content)
+
+        # Try other common attributes
+        if hasattr(response, "text"):
+            return str(response.text)
+
+        if hasattr(response, "message") and hasattr(response.message, "content"):
+            return str(response.message.content)
+
+        # Log unknown response type for debugging
+        if self.logger:
+            self.logger.warning(
+                f"Unknown response type {type(response)}, falling back to string conversion"
+            )
+
+        return str(response)
+
+    def evaluate(
+        self,
+        listing: Listing,
+        item_config: TItemConfig,
+        marketplace_config: TMarketplaceConfig,
+    ) -> AIResponse:
+        """Evaluate a listing using the LangChain model."""
+        counter.increment(CounterItem.AI_QUERY, item_config.name)
+        prompt = self.get_prompt(listing, item_config, marketplace_config)
+
+        # Check cache first
+        res: AIResponse | None = AIResponse.from_cache(listing, item_config, marketplace_config)
+        if res is not None:
+            if self.logger:
+                self.logger.debug(
+                    f"""{hilight("[AI]", res.style)} {self.config.name} previously concluded {hilight(f"{res.conclusion} ({res.score}): {res.comment}", res.style)} for listing {hilight(listing.title)}."""
+                )
+            return res
+
+        self.connect()
+
+        retries = 0
+        response = None
+        while retries < self.config.max_retries:
+            try:
+                # Thread-safe access to model
+                with self._model_lock:
+                    current_model = self._chat_model
+                    assert current_model is not None
+
+                # Use LangChain's invoke method (outside the lock to avoid blocking other threads)
+                response = current_model.invoke(
+                    [
+                        (
+                            "system",
+                            "You are a helpful assistant that can confirm if a user's search criteria matches the item he is interested in.",
+                        ),
+                        ("user", prompt),
+                    ]
+                )
+                break
+            except KeyboardInterrupt:
+                raise
+            except Exception as e:
+                if self.logger:
+                    self.logger.error(
+                        f"""{hilight("[AI-Error]", "fail")} {self.config.name} failed to evaluate {hilight(listing.title)}: {e}"""
+                    )
+                retries += 1
+                # Thread-safe reset of connection on error
+                with self._model_lock:
+                    self._chat_model = None
+                time.sleep(5)
+                if retries < self.config.max_retries:
+                    try:
+                        self.connect()
+                    except Exception as connect_error:
+                        if self.logger:
+                            self.logger.error(
+                                f"""{hilight("[AI-Error]", "fail")} {self.config.name} failed to reconnect (attempt {retries + 1}): {connect_error}"""
+                            )
+                        # Continue to next retry iteration
+
+        # Check if we got a response
+        if response is None:
+            counter.increment(CounterItem.FAILED_AI_QUERY, item_config.name)
+            raise ValueError(
+                f"Failed to get response from {self.config.name} after {self.config.max_retries} retries"
+            )
+
+        # Parse the response content
+        if self.logger:
+            self.logger.debug(f"""{hilight("[AI-Response]", "info")} {pretty_repr(response)}""")
+
+        # Extract content using proper type checking with fallbacks
+        answer = self._extract_response_content(response)
+        res = self._parse_ai_response(answer, item_config)
+        res.to_cache(listing, item_config, marketplace_config)
+        counter.increment(CounterItem.NEW_AI_QUERY, item_config.name)
+        return res
