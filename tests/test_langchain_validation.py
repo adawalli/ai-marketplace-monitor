@@ -87,6 +87,74 @@ class TestLangChainBackendValidation:
             with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
                 LangChainBackend.get_config(name="test-openai", provider="openai", timeout=0)
 
+    def test_validate_config_compatibility_openrouter_valid(self) -> None:
+        """Test OpenRouter configuration validation with valid inputs."""
+        config = LangChainBackend.get_config(
+            name="test-openrouter",
+            provider="openrouter",
+            api_key="sk-or-abcdefgh7890abcdefgh7890abcdefgh7890abcdefgh",
+            model="anthropic/claude-3-sonnet",
+        )
+        assert config.name == "test-openrouter"
+        assert config.provider == "openrouter"
+        assert config.model == "anthropic/claude-3-sonnet"
+
+    def test_validate_config_compatibility_openrouter_missing_api_key(self) -> None:
+        """Test OpenRouter configuration validation with missing API key."""
+        with patch.dict(os.environ, {}, clear=True):
+            with pytest.raises(ValueError, match="OpenRouter requires an API key"):
+                LangChainBackend.get_config(
+                    name="test-openrouter",
+                    provider="openrouter",
+                    model="anthropic/claude-3-sonnet",
+                )
+
+    def test_validate_config_compatibility_openrouter_invalid_api_key_format(self) -> None:
+        """Test OpenRouter configuration validation with invalid API key format."""
+        with pytest.raises(ValueError, match="OpenRouter API key must start with 'sk-or-'"):
+            LangChainBackend.get_config(
+                name="test-openrouter",
+                provider="openrouter",
+                api_key="invalid-key",
+                model="anthropic/claude-3-sonnet",
+            )
+
+    def test_validate_config_compatibility_openrouter_invalid_model_format(self) -> None:
+        """Test OpenRouter configuration validation with invalid model format."""
+        with pytest.raises(
+            ValueError, match="OpenRouter model 'gpt-4' must follow 'provider/model' format"
+        ):
+            LangChainBackend.get_config(
+                name="test-openrouter",
+                provider="openrouter",
+                api_key="sk-or-abcdefgh7890abcdefgh7890abcdefgh7890abcdefgh",
+                model="gpt-4",  # Should be "openai/gpt-4"
+            )
+
+    def test_validate_config_compatibility_openrouter_env_api_key(self) -> None:
+        """Test OpenRouter configuration validation using environment API key."""
+        with patch.dict(
+            os.environ, {"OPENROUTER_API_KEY": "sk-or-envkey7890abcdefgh7890abcdefgh7890abcdefgh"}
+        ):
+            config = LangChainBackend.get_config(
+                name="test-openrouter",
+                provider="openrouter",
+                model="openai/gpt-4o",
+            )
+            assert config.name == "test-openrouter"
+            assert config.provider == "openrouter"
+            assert config.model == "openai/gpt-4o"
+
+    def test_validate_config_compatibility_openrouter_env_invalid_api_key(self) -> None:
+        """Test OpenRouter configuration validation with invalid environment API key."""
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "invalid-env-key"}):
+            with pytest.raises(ValueError, match="OpenRouter API key must start with 'sk-or-'"):
+                LangChainBackend.get_config(
+                    name="test-openrouter",
+                    provider="openrouter",
+                    model="anthropic/claude-3-sonnet",
+                )
+
     def test_validate_thread_safety_success(self) -> None:
         """Test thread safety validation with properly initialized backend."""
         config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
@@ -205,6 +273,71 @@ class TestLangChainBackendValidation:
 
         assert isinstance(mapped_error, RuntimeError)
         assert "Unexpected error: Unknown runtime error" in str(mapped_error)
+
+    def test_map_langchain_exception_openrouter_api_key_error(self) -> None:
+        """Test mapping of OpenRouter API key format errors."""
+        config = AIConfig(
+            name="test-backend",
+            provider="openrouter",
+            api_key="sk-or-abcdefgh7890abcdefgh7890abcdefgh7890abcdefgh",
+        )
+        backend = LangChainBackend(config)
+
+        original_error = ValueError("OpenRouter API key must start with 'sk-or-'")
+        mapped_error = backend._map_langchain_exception(original_error, "OpenRouter connection")
+
+        assert isinstance(mapped_error, ValueError)
+        assert "OpenRouter API key format error" in str(mapped_error)
+        assert "https://openrouter.ai/keys" in str(mapped_error)
+
+    def test_map_langchain_exception_openrouter_model_format_error(self) -> None:
+        """Test mapping of OpenRouter model format errors."""
+        config = AIConfig(
+            name="test-backend",
+            provider="openrouter",
+            api_key="sk-or-abcdefgh7890abcdefgh7890abcdefgh7890abcdefgh",
+        )
+        backend = LangChainBackend(config)
+
+        original_error = ValueError("OpenRouter model 'gpt-4' must follow 'provider/model' format")
+        mapped_error = backend._map_langchain_exception(original_error, "OpenRouter validation")
+
+        assert isinstance(mapped_error, ValueError)
+        assert "OpenRouter model format error" in str(mapped_error)
+        assert "anthropic/claude-3-sonnet" in str(mapped_error)
+        assert "https://openrouter.ai/models" in str(mapped_error)
+
+    def test_map_langchain_exception_openrouter_rate_limit_error(self) -> None:
+        """Test mapping of OpenRouter rate limit errors."""
+        config = AIConfig(
+            name="test-backend",
+            provider="openrouter",
+            api_key="sk-or-abcdefgh7890abcdefgh7890abcdefgh7890abcdefgh",
+        )
+        backend = LangChainBackend(config)
+
+        original_error = ConnectionError("Rate limit exceeded for OpenRouter API")
+        mapped_error = backend._map_langchain_exception(original_error, "OpenRouter evaluation")
+
+        assert isinstance(mapped_error, RuntimeError)
+        assert "OpenRouter service error" in str(mapped_error)
+        assert "https://openrouter.ai/activity" in str(mapped_error)
+
+    def test_map_langchain_exception_openrouter_quota_exceeded_error(self) -> None:
+        """Test mapping of OpenRouter quota exceeded errors."""
+        config = AIConfig(
+            name="test-backend",
+            provider="openrouter",
+            api_key="sk-or-abcdefgh7890abcdefgh7890abcdefgh7890abcdefgh",
+        )
+        backend = LangChainBackend(config)
+
+        original_error = RuntimeError("Quota exceeded: insufficient credits")
+        mapped_error = backend._map_langchain_exception(original_error, "OpenRouter request")
+
+        assert isinstance(mapped_error, RuntimeError)
+        assert "OpenRouter billing issue" in str(mapped_error)
+        assert "https://openrouter.ai/credits" in str(mapped_error)
 
     def test_validate_mixed_configuration_legacy_provider(self) -> None:
         """Test validation of mixed configuration with legacy service_provider."""

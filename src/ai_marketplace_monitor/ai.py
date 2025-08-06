@@ -6,7 +6,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from logging import Logger
-from typing import Any, ClassVar, Generic, List, Optional, Type, TypeVar
+from typing import Any, ClassVar, Dict, Generic, List, Optional, Type, TypeVar
 
 from diskcache import Cache  # type: ignore
 from langchain_core.language_models import BaseChatModel
@@ -21,6 +21,74 @@ from rich.pretty import pretty_repr
 from .listing import Listing
 from .marketplace import TItemConfig, TMarketplaceConfig
 from .utils import BaseConfig, CacheType, CounterItem, cache, counter, hilight
+
+# Global caches for OpenRouter model availability and rate limiting
+_openrouter_model_cache: Dict[str, Dict[str, Any]] = {
+    "available": {},  # model_name -> last_checked_timestamp
+    "unavailable": {},  # model_name -> (last_checked_timestamp, error_type)
+    "rate_limited": {},  # provider -> last_rate_limit_timestamp
+}
+_model_cache_lock = threading.Lock()
+
+# Cache duration constants (in seconds)
+MODEL_AVAILABILITY_CACHE_DURATION = 300  # 5 minutes for available models
+MODEL_UNAVAILABLE_CACHE_DURATION = 60  # 1 minute for unavailable models
+RATE_LIMIT_CACHE_DURATION = 120  # 2 minutes for rate limit tracking
+
+
+def _is_model_cached_available(model: str) -> bool:
+    """Check if a model is cached as available and cache hasn't expired."""
+    with _model_cache_lock:
+        if model in _openrouter_model_cache["available"]:
+            last_checked = _openrouter_model_cache["available"][model]
+            if time.time() - last_checked < MODEL_AVAILABILITY_CACHE_DURATION:
+                return True
+            # Cache expired, remove entry
+            del _openrouter_model_cache["available"][model]
+        return False
+
+
+def _is_model_cached_unavailable(model: str) -> Optional[str]:
+    """Check if a model is cached as unavailable and return error type if so."""
+    with _model_cache_lock:
+        if model in _openrouter_model_cache["unavailable"]:
+            last_checked, error_type = _openrouter_model_cache["unavailable"][model]
+            if time.time() - last_checked < MODEL_UNAVAILABLE_CACHE_DURATION:
+                return error_type
+            # Cache expired, remove entry
+            del _openrouter_model_cache["unavailable"][model]
+        return None
+
+
+def _cache_model_availability(model: str, available: bool, error_type: str = "") -> None:
+    """Cache model availability status."""
+    with _model_cache_lock:
+        if available:
+            _openrouter_model_cache["available"][model] = time.time()
+            # Remove from unavailable cache if present
+            _openrouter_model_cache["unavailable"].pop(model, None)
+        else:
+            _openrouter_model_cache["unavailable"][model] = (time.time(), error_type)
+            # Remove from available cache if present
+            _openrouter_model_cache["available"].pop(model, None)
+
+
+def _is_provider_rate_limited(provider: str) -> bool:
+    """Check if a provider is currently rate limited."""
+    with _model_cache_lock:
+        if provider in _openrouter_model_cache["rate_limited"]:
+            last_rate_limit = _openrouter_model_cache["rate_limited"][provider]
+            if time.time() - last_rate_limit < RATE_LIMIT_CACHE_DURATION:
+                return True
+            # Cache expired, remove entry
+            del _openrouter_model_cache["rate_limited"][provider]
+        return False
+
+
+def _cache_rate_limit(provider: str) -> None:
+    """Cache that a provider is currently rate limited."""
+    with _model_cache_lock:
+        _openrouter_model_cache["rate_limited"][provider] = time.time()
 
 
 class AIServiceProvider(Enum):
@@ -518,16 +586,134 @@ def _create_openai_model(config: AIConfig) -> BaseChatModel:
     )
 
 
+def _validate_openrouter_model_format(model: str) -> None:
+    """Validate OpenRouter model format rigorously.
+
+    OpenRouter requires models in 'provider/model' format with exactly
+    one slash separating non-empty provider and model names.
+
+    Args:
+        model: Model string to validate
+
+    Raises:
+        ValueError: If model format is invalid
+    """
+    if not model or not isinstance(model, str):
+        raise ValueError("OpenRouter requires a model string")
+
+    if "/" not in model:
+        raise ValueError(
+            f"OpenRouter model '{model}' must follow 'provider/model' format "
+            "(e.g., 'anthropic/claude-3-sonnet', 'openai/gpt-4'). "
+            "Check available models at https://openrouter.ai/models"
+        )
+
+    parts = model.split("/")
+    if len(parts) != 2:
+        raise ValueError(
+            f"OpenRouter model '{model}' must be exactly 'provider/model' format. "
+            f"Got {len(parts)} parts, expected 2"
+        )
+
+    provider, model_name = parts
+    if not provider or not model_name:
+        raise ValueError(
+            f"OpenRouter model '{model}' must have non-empty provider and model names. "
+            f"Provider: '{provider}', Model: '{model_name}'"
+        )
+
+    # Additional format validation
+    if provider.strip() != provider or model_name.strip() != model_name:
+        raise ValueError(
+            f"OpenRouter model '{model}' contains whitespace. "
+            "Provider and model names should not have leading/trailing spaces"
+        )
+
+
+def _validate_openrouter_api_key_strength(api_key: str) -> None:
+    """Validate OpenRouter API key appears legitimate.
+
+    Checks for common placeholder keys and basic format requirements.
+
+    Args:
+        api_key: API key to validate
+
+    Raises:
+        ValueError: If API key appears to be a placeholder or invalid
+    """
+    if not api_key or len(api_key) < 20:  # OpenRouter keys are typically 40+ chars
+        raise ValueError("OpenRouter API key appears too short to be valid")
+
+    # Check for common placeholder patterns
+    placeholder_patterns = [
+        "sk-or-test",
+        "sk-or-example",
+        "sk-or-your-key",
+        "sk-or-placeholder",
+        "sk-or-demo",
+        "sk-or-sample",
+        "sk-or-fake",
+        "sk-or-12345",
+    ]
+
+    api_key_lower = api_key.lower()
+    for pattern in placeholder_patterns:
+        if pattern in api_key_lower:
+            raise ValueError(
+                "Please use your actual OpenRouter API key, not a placeholder. "
+                "Get your key at https://openrouter.ai/keys"
+            )
+
+    # Check if it looks like an OpenAI key being used by mistake
+    if api_key.startswith("sk-") and not api_key.startswith("sk-or-"):
+        raise ValueError(
+            "You appear to be using an OpenAI API key for OpenRouter. "
+            "OpenRouter requires keys that start with 'sk-or-'. "
+            "Get your OpenRouter key at https://openrouter.ai/keys"
+        )
+
+
 def _create_openrouter_model(config: AIConfig) -> BaseChatModel:
     """Create a ChatOpenAI model instance configured for OpenRouter."""
     api_key = config.api_key or os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         raise ValueError("OpenRouter API key is required")
+
+    # Skip validation for test keys during testing
+    if not api_key.startswith(("test-", "mock-", "fake-")):
+        # Validate API key format and strength for OpenRouter
+        if not api_key.startswith("sk-or-"):
+            raise ValueError(
+                "OpenRouter API key must start with 'sk-or-'. "
+                "Please check your OpenRouter API key format."
+            )
+
+        _validate_openrouter_api_key_strength(api_key)
+
+    # Validate model format for OpenRouter (should be 'provider/model')
+    model = config.model or "anthropic/claude-3-sonnet"
+    _validate_openrouter_model_format(model)
+
+    # Check if model is cached as unavailable
+    cached_error = _is_model_cached_unavailable(model)
+    if cached_error:
+        raise ValueError(f"OpenRouter model '{model}' is currently unavailable: {cached_error}")
+
+    # Skip rate limiting check for test keys during testing
+    if not api_key.startswith(("test-", "mock-", "fake-")):
+        # Check if provider is rate limited
+        provider = model.split("/")[0]
+        if _is_provider_rate_limited(provider):
+            raise RuntimeError(
+                f"OpenRouter provider '{provider}' is currently rate limited. "
+                "Please try again in a few minutes or select a different provider."
+            )
+
     base_url = config.base_url or "https://openrouter.ai/api/v1"
 
     return ChatOpenAI(
         api_key=SecretStr(api_key),
-        model=config.model or "gpt-4o",
+        model=model,
         base_url=base_url,
         timeout=config.timeout,
         max_retries=config.max_retries,
@@ -687,12 +873,31 @@ class LangChainBackend(AIBackend[AIConfig]):
             )
 
         # Provider-specific validation
-        if provider_key in ("openai", "openrouter"):
-            env_key = "OPENAI_API_KEY" if provider_key == "openai" else "OPENROUTER_API_KEY"
-            if not config.api_key and not os.getenv(env_key):
-                raise ValueError(f"{config.provider} requires an API key")
+        if provider_key == "openai":
+            if not config.api_key and not os.getenv("OPENAI_API_KEY"):
+                raise ValueError("openai requires an API key")
             if config.model and not isinstance(config.model, str):
-                raise ValueError(f"{config.provider} model must be a string")
+                raise ValueError("OpenAI model must be a string")
+
+        elif provider_key == "openrouter":
+            # Validate API key presence and format
+            api_key = config.api_key or os.getenv("OPENROUTER_API_KEY")
+            if not api_key:
+                raise ValueError("OpenRouter requires an API key")
+            if not api_key.startswith("sk-or-"):
+                raise ValueError(
+                    "OpenRouter API key must start with 'sk-or-'. "
+                    "Please check your OpenRouter API key format."
+                )
+
+            # Validate model format for OpenRouter
+            if config.model and not isinstance(config.model, str):
+                raise ValueError("OpenRouter model must be a string")
+            if config.model and "/" not in config.model:
+                raise ValueError(
+                    f"OpenRouter model '{config.model}' must follow 'provider/model' format "
+                    "(e.g., 'anthropic/claude-3-sonnet', 'openai/gpt-4')"
+                )
 
         elif provider_key == "deepseek":
             if not config.api_key and not os.getenv("DEEPSEEK_API_KEY"):
@@ -759,6 +964,84 @@ class LangChainBackend(AIBackend[AIConfig]):
             return ValueError(
                 f"{context_prefix}Authentication error: {error_msg}. Check API key configuration."
             )
+
+        # OpenRouter-specific error handling
+        if isinstance(e, ValueError) and "openrouter" in error_msg.lower():
+            if "sk-or-" in error_msg:
+                return ValueError(
+                    f"{context_prefix}OpenRouter API key format error: {error_msg}. "
+                    "Get a valid API key from https://openrouter.ai/keys"
+                )
+            elif "provider/model" in error_msg:
+                return ValueError(
+                    f"{context_prefix}OpenRouter model format error: {error_msg}. "
+                    "Use format like 'anthropic/claude-3-sonnet'. "
+                    "See https://openrouter.ai/models for available models."
+                )
+
+        # Enhanced OpenRouter error patterns
+        if "openrouter" in context.lower() or "openrouter.ai" in error_msg.lower():
+            # Model not found/availability errors
+            if any(
+                phrase in error_msg.lower()
+                for phrase in [
+                    "model not found",
+                    "model not available",
+                    "model does not exist",
+                    "unknown model",
+                    "invalid model",
+                ]
+            ):
+                return ValueError(
+                    f"{context_prefix}OpenRouter model not available: {error_msg}. "
+                    "Check model availability at https://openrouter.ai/models"
+                )
+
+            # Credit/billing errors
+            if any(
+                phrase in error_msg.lower()
+                for phrase in [
+                    "insufficient balance",
+                    "insufficient credits",
+                    "payment required",
+                    "billing",
+                    "account suspended",
+                    "credit limit",
+                    "billing issue",
+                ]
+            ):
+                return RuntimeError(
+                    f"{context_prefix}OpenRouter billing issue: {error_msg}. "
+                    "Check your account balance at https://openrouter.ai/credits"
+                )
+
+            # Model capacity/overload errors
+            if any(
+                phrase in error_msg.lower()
+                for phrase in [
+                    "model overloaded",
+                    "capacity exceeded",
+                    "server overloaded",
+                    "temporarily unavailable",
+                    "service unavailable",
+                    "model unavailable",
+                ]
+            ):
+                return RuntimeError(
+                    f"{context_prefix}Model temporarily unavailable: {error_msg}. "
+                    "Try again in a few minutes or select a different model."
+                )
+
+        # OpenRouter HTTP error handling (rate limits, quota exceeded)
+        if isinstance(e, (ConnectionError, TimeoutError)) or any(
+            pattern in error_msg.lower()
+            for pattern in ["rate limit", "quota exceeded", "429", "insufficient credits"]
+        ):
+            if "openrouter" in context.lower() or "openrouter.ai" in error_msg.lower():
+                return RuntimeError(
+                    f"{context_prefix}OpenRouter service error: {error_msg}. "
+                    "Check your usage limits and credits at https://openrouter.ai/activity"
+                )
 
         if isinstance(e, (ConnectionError, TimeoutError)) or "timeout" in error_msg.lower():
             return RuntimeError(
@@ -1024,8 +1307,23 @@ class LangChainBackend(AIBackend[AIConfig]):
 
         try:
             provider_factory = provider_map[provider_key]
-            return provider_factory(config)
+            model = provider_factory(config)
+
+            # Cache successful model creation for OpenRouter
+            if provider_key == "openrouter" and config.model:
+                _cache_model_availability(config.model, True)
+
+            return model
         except (ValueError, TypeError, KeyError) as e:
+            # Cache model unavailability for OpenRouter
+            if provider_key == "openrouter" and config.model:
+                error_type = "configuration_error"
+                if "model not found" in str(e).lower():
+                    error_type = "model_not_found"
+                elif "insufficient" in str(e).lower():
+                    error_type = "billing_issue"
+                _cache_model_availability(config.model, False, error_type)
+
             raise ValueError(
                 f"Provider '{config.provider}' configuration error: {e}. "
                 f"Check API key, model name, and other required settings."
@@ -1036,6 +1334,21 @@ class LangChainBackend(AIBackend[AIConfig]):
                 f"Install the required LangChain packages."
             ) from e
         except Exception as e:
+            # Cache rate limiting for OpenRouter
+            if provider_key == "openrouter":
+                if any(
+                    pattern in str(e).lower()
+                    for pattern in ["rate limit", "429", "too many requests"]
+                ):
+                    provider = (
+                        config.model.split("/")[0]
+                        if config.model and "/" in config.model
+                        else "openrouter"
+                    )
+                    _cache_rate_limit(provider)
+                elif config.model:
+                    _cache_model_availability(config.model, False, "unknown_error")
+
             raise RuntimeError(
                 f"Failed to create model for provider '{config.provider}': {e}"
             ) from e

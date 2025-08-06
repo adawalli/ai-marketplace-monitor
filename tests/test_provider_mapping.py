@@ -67,7 +67,7 @@ class TestOpenAIProviderMapping:
         assert model.openai_api_key.get_secret_value() == "test-key"  # type: ignore
         assert model.model_name == "gpt-4o"  # Default model
 
-    @patch.dict(os.environ, {"OPENAI_API_KEY": "env-key"})
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "test-env-key"})
     def test_create_openai_model_with_env_fallback(self) -> None:
         """Test OpenAI model creation falls back to environment variable."""
         config = AIConfig(name="test-openai", provider="openai")  # No api_key
@@ -75,7 +75,7 @@ class TestOpenAIProviderMapping:
         model = _create_openai_model(config)
 
         assert isinstance(model, ChatOpenAI)
-        assert model.openai_api_key.get_secret_value() == "env-key"  # type: ignore
+        assert model.openai_api_key.get_secret_value() == "test-env-key"  # type: ignore
 
     def test_provider_map_openai_integration(self) -> None:
         """Test that provider_map['openai'] works correctly."""
@@ -95,7 +95,7 @@ class TestOpenRouterProviderMapping:
             name="test-openrouter",
             api_key="test-key",
             provider="openrouter",
-            model="gpt-4",
+            model="openai/gpt-4",
             base_url="https://custom.openrouter.ai/api/v1",
             timeout=60,
             max_retries=5,
@@ -105,7 +105,7 @@ class TestOpenRouterProviderMapping:
 
         assert isinstance(model, ChatOpenAI)
         assert model.openai_api_key.get_secret_value() == "test-key"  # type: ignore
-        assert model.model_name == "gpt-4"
+        assert model.model_name == "openai/gpt-4"
         assert model.openai_api_base == "https://custom.openrouter.ai/api/v1"
         assert model.request_timeout == 60
         assert model.max_retries == 5
@@ -118,10 +118,10 @@ class TestOpenRouterProviderMapping:
 
         assert isinstance(model, ChatOpenAI)
         assert model.openai_api_key.get_secret_value() == "test-key"  # type: ignore
-        assert model.model_name == "gpt-4o"  # Default model
+        assert model.model_name == "anthropic/claude-3-sonnet"  # Default model
         assert model.openai_api_base == "https://openrouter.ai/api/v1"  # Default base URL
 
-    @patch.dict(os.environ, {"OPENROUTER_API_KEY": "env-key"})
+    @patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-env-key"})
     def test_create_openrouter_model_with_env_fallback(self) -> None:
         """Test OpenRouter model creation falls back to environment variable."""
         config = AIConfig(name="test-openrouter", provider="openrouter")  # No api_key
@@ -129,7 +129,7 @@ class TestOpenRouterProviderMapping:
         model = _create_openrouter_model(config)
 
         assert isinstance(model, ChatOpenAI)
-        assert model.openai_api_key.get_secret_value() == "env-key"  # type: ignore
+        assert model.openai_api_key.get_secret_value() == "test-env-key"  # type: ignore
 
     def test_provider_map_openrouter_integration(self) -> None:
         """Test that provider_map['openrouter'] works correctly."""

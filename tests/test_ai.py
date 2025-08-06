@@ -1,3 +1,4 @@
+import os
 from unittest.mock import Mock, patch
 
 import pytest
@@ -741,3 +742,388 @@ class TestAIResponseEnhancements:
         assert reconstructed.prompt_tokens == 200
         assert reconstructed.usage_metadata["model"] == "gpt-4"
         assert reconstructed.has_token_usage is True
+
+
+class TestOpenRouterProvider:
+    """Test suite for OpenRouter provider functionality."""
+
+    def test_create_openrouter_model_valid_config(self) -> None:
+        """Test OpenRouter model creation with valid configuration."""
+        from ai_marketplace_monitor.ai import _create_openrouter_model
+
+        config = AIConfig(
+            name="test-openrouter",
+            provider="openrouter",
+            api_key="sk-or-abcdefgh7890abcdefgh7890abcdefgh7890abcdefgh",
+            model="anthropic/claude-3-sonnet",
+            timeout=60,
+            max_retries=3,
+        )
+
+        with patch("ai_marketplace_monitor.ai.ChatOpenAI") as mock_chat_openai:
+            mock_model = Mock()
+            mock_chat_openai.return_value = mock_model
+
+            result = _create_openrouter_model(config)
+
+            assert result == mock_model
+            mock_chat_openai.assert_called_once()
+            call_args = mock_chat_openai.call_args
+
+            # Verify API key is properly wrapped in SecretStr
+            assert (
+                call_args.kwargs["api_key"].get_secret_value()
+                == "sk-or-abcdefgh7890abcdefgh7890abcdefgh7890abcdefgh"
+            )
+            assert call_args.kwargs["model"] == "anthropic/claude-3-sonnet"
+            assert call_args.kwargs["base_url"] == "https://openrouter.ai/api/v1"
+            assert call_args.kwargs["timeout"] == 60
+            assert call_args.kwargs["max_retries"] == 3
+
+            # Verify headers
+            headers = call_args.kwargs["default_headers"]
+            assert headers["X-Title"] == "AI Marketplace Monitor"
+            assert headers["HTTP-Referer"] == "https://github.com/BoPeng/ai-marketplace-monitor"
+
+    def test_create_openrouter_model_env_api_key(self) -> None:
+        """Test OpenRouter model creation using environment API key."""
+        from ai_marketplace_monitor.ai import _create_openrouter_model
+
+        config = AIConfig(name="test-openrouter", provider="openrouter", model="openai/gpt-4o")
+
+        with (
+            patch.dict(
+                os.environ,
+                {"OPENROUTER_API_KEY": "sk-or-envkey7890abcdefgh7890abcdefgh7890abcdefgh"},
+            ),
+            patch("ai_marketplace_monitor.ai.ChatOpenAI") as mock_chat_openai,
+        ):
+            mock_model = Mock()
+            mock_chat_openai.return_value = mock_model
+
+            result = _create_openrouter_model(config)
+
+            assert result == mock_model
+            call_args = mock_chat_openai.call_args
+            assert (
+                call_args.kwargs["api_key"].get_secret_value()
+                == "sk-or-envkey7890abcdefgh7890abcdefgh7890abcdefgh"
+            )
+
+    def test_create_openrouter_model_missing_api_key(self) -> None:
+        """Test OpenRouter model creation with missing API key."""
+        from ai_marketplace_monitor.ai import _create_openrouter_model
+
+        config = AIConfig(
+            name="test-openrouter", provider="openrouter", model="anthropic/claude-3-sonnet"
+        )
+
+        with patch.dict(os.environ, {}, clear=True):
+            with pytest.raises(ValueError, match="OpenRouter API key is required"):
+                _create_openrouter_model(config)
+
+    def test_create_openrouter_model_invalid_api_key_format(self) -> None:
+        """Test OpenRouter model creation with invalid API key format."""
+        from ai_marketplace_monitor.ai import _create_openrouter_model
+
+        config = AIConfig(
+            name="test-openrouter",
+            provider="openrouter",
+            api_key="invalid-key-format",
+            model="anthropic/claude-3-sonnet",
+        )
+
+        with pytest.raises(ValueError, match="OpenRouter API key must start with 'sk-or-'"):
+            _create_openrouter_model(config)
+
+    def test_create_openrouter_model_invalid_model_format(self) -> None:
+        """Test OpenRouter model creation with invalid model format."""
+        from ai_marketplace_monitor.ai import _create_openrouter_model
+
+        config = AIConfig(
+            name="test-openrouter",
+            provider="openrouter",
+            api_key="sk-or-abcdefgh7890abcdefgh7890abcdefgh7890abcdefgh",
+            model="gpt-4",  # Should be "openai/gpt-4"
+        )
+
+        with pytest.raises(ValueError, match="must follow 'provider/model' format"):
+            _create_openrouter_model(config)
+
+    def test_create_openrouter_model_default_model(self) -> None:
+        """Test OpenRouter model creation with default model."""
+        from ai_marketplace_monitor.ai import _create_openrouter_model
+
+        config = AIConfig(
+            name="test-openrouter",
+            provider="openrouter",
+            api_key="sk-or-abcdefgh7890abcdefgh7890abcdefgh7890abcdefgh",
+            # No model specified - should use default
+        )
+
+        with patch("ai_marketplace_monitor.ai.ChatOpenAI") as mock_chat_openai:
+            mock_model = Mock()
+            mock_chat_openai.return_value = mock_model
+
+            result = _create_openrouter_model(config)
+
+            assert result == mock_model
+            call_args = mock_chat_openai.call_args
+            assert call_args.kwargs["model"] == "anthropic/claude-3-sonnet"
+
+    def test_create_openrouter_model_custom_base_url(self) -> None:
+        """Test OpenRouter model creation with custom base URL."""
+        from ai_marketplace_monitor.ai import _create_openrouter_model
+
+        config = AIConfig(
+            name="test-openrouter",
+            provider="openrouter",
+            api_key="sk-or-abcdefgh7890abcdefgh7890abcdefgh7890abcdefgh",
+            model="anthropic/claude-3-sonnet",
+            base_url="https://custom-openrouter-proxy.example.com/v1",
+        )
+
+        with patch("ai_marketplace_monitor.ai.ChatOpenAI") as mock_chat_openai:
+            mock_model = Mock()
+            mock_chat_openai.return_value = mock_model
+
+            result = _create_openrouter_model(config)
+
+            assert result == mock_model
+            call_args = mock_chat_openai.call_args
+            assert call_args.kwargs["base_url"] == "https://custom-openrouter-proxy.example.com/v1"
+
+    def test_openrouter_provider_mapping(self) -> None:
+        """Test that OpenRouter is properly mapped in the provider_map."""
+        from ai_marketplace_monitor.ai import _create_openrouter_model, provider_map
+
+        assert "openrouter" in provider_map
+        assert provider_map["openrouter"] == _create_openrouter_model
+
+    def test_langchain_backend_with_openrouter(
+        self,
+        item_config: FacebookItemConfig,
+        marketplace_config: FacebookMarketplaceConfig,
+        listing: Listing,
+    ) -> None:
+        """Test LangChainBackend integration with OpenRouter provider."""
+        config = AIConfig(
+            name="test-openrouter",
+            provider="openrouter",
+            api_key="sk-or-abcdefgh7890abcdefgh7890abcdefgh7890abcdefgh",
+            model="anthropic/claude-3-sonnet",
+            max_retries=1,
+        )
+        backend = LangChainBackend(config)
+
+        # Mock the OpenRouter model and its response
+        mock_model = Mock()
+        mock_response = Mock()
+        mock_response.content = "This looks good.\nRating 4: Great deal with good condition"
+        mock_response.usage_metadata = {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+        }
+        mock_response.response_metadata = {"model": "anthropic/claude-3-sonnet"}
+        mock_model.invoke.return_value = mock_response
+
+        with (
+            patch("ai_marketplace_monitor.ai.AIResponse.from_cache", return_value=None),
+            patch("ai_marketplace_monitor.ai.counter"),
+            patch.object(backend, "_get_model", return_value=mock_model),
+        ):
+            result = backend.evaluate(listing, item_config, marketplace_config)
+
+            assert result.score == 4
+            assert "Great deal with good condition" in result.comment
+            assert result.name == "test-openrouter"
+            assert result.prompt_tokens == 100
+            assert result.completion_tokens == 50
+            assert result.total_tokens == 150
+
+
+class TestOpenRouterValidationEnhancements:
+    """Test enhanced validation for OpenRouter provider."""
+
+    def test_model_format_validation_edge_cases(self) -> None:
+        """Test edge cases in model format validation."""
+        from ai_marketplace_monitor.ai import _validate_openrouter_model_format
+
+        # Valid cases should not raise
+        _validate_openrouter_model_format("anthropic/claude-3-sonnet")
+        _validate_openrouter_model_format("openai/gpt-4")
+        _validate_openrouter_model_format("meta-llama/llama-3.1-8b-instruct")
+
+        # Invalid cases should raise ValueError
+        invalid_models = [
+            "",  # Empty string
+            "no-slash",  # No slash
+            "provider/",  # Empty model
+            "/model",  # Empty provider
+            "provider//model",  # Double slash
+            "provider/model/extra",  # Too many parts
+            " provider/model",  # Leading whitespace
+            "provider/model ",  # Trailing whitespace
+            "provider/ model",  # Whitespace in model name
+        ]
+
+        for invalid_model in invalid_models:
+            with pytest.raises(ValueError):
+                _validate_openrouter_model_format(invalid_model)
+
+    def test_api_key_strength_validation_placeholder_detection(self) -> None:
+        """Test API key strength validation detects placeholder keys."""
+        from ai_marketplace_monitor.ai import _validate_openrouter_api_key_strength
+
+        # Valid key should pass
+        _validate_openrouter_api_key_strength("sk-or-abcdef7890abcdef7890abcdef7890abcdef78901234")
+
+        # Short keys should fail
+        with pytest.raises(ValueError, match="too short"):
+            _validate_openrouter_api_key_strength("sk-or-short")
+
+        # Placeholder keys should fail (make them long enough to avoid length check)
+        placeholder_keys = [
+            "sk-or-test-1234567890abcdef1234567890",
+            "sk-or-example-key-1234567890abcdef123",
+            "sk-or-your-key-here-1234567890abcdef",
+            "sk-or-placeholder-12345-1234567890ab",
+            "sk-or-demo-key-1234567890abcdef12345",
+            "sk-or-sample-key-1234567890abcdef123",
+            "sk-or-fake-key-1234567890abcdef12345",
+        ]
+
+        for placeholder_key in placeholder_keys:
+            with pytest.raises(ValueError, match="actual OpenRouter API key"):
+                _validate_openrouter_api_key_strength(placeholder_key)
+
+        # Test that short placeholder key is caught for length first
+        with pytest.raises(ValueError, match="too short"):
+            _validate_openrouter_api_key_strength("sk-or-test")
+
+        # Test the specific 12345 pattern with sufficient length
+        with pytest.raises(ValueError, match="actual OpenRouter API key"):
+            _validate_openrouter_api_key_strength("sk-or-12345-1234567890abcdef1234567890")
+
+    def test_api_key_strength_validation_openai_key_detection(self) -> None:
+        """Test that OpenAI keys are detected and rejected."""
+        from ai_marketplace_monitor.ai import _validate_openrouter_api_key_strength
+
+        # OpenAI-style keys should be rejected
+        openai_keys = [
+            "sk-1234567890abcdef1234567890abcdef12345678",
+            "sk-proj-1234567890abcdef1234567890abcdef12345678",
+        ]
+
+        for openai_key in openai_keys:
+            with pytest.raises(ValueError, match="OpenAI API key for OpenRouter"):
+                _validate_openrouter_api_key_strength(openai_key)
+
+
+class TestOpenRouterCaching:
+    """Test OpenRouter model availability and rate limiting caching."""
+
+    def setup_method(self) -> None:
+        """Clear cache before each test."""
+        from ai_marketplace_monitor.ai import _model_cache_lock, _openrouter_model_cache
+
+        with _model_cache_lock:
+            _openrouter_model_cache["available"].clear()
+            _openrouter_model_cache["unavailable"].clear()
+            _openrouter_model_cache["rate_limited"].clear()
+
+    def test_model_availability_caching(self) -> None:
+        """Test that model availability is cached properly."""
+        from ai_marketplace_monitor.ai import (
+            _cache_model_availability,
+            _is_model_cached_available,
+            _is_model_cached_unavailable,
+        )
+
+        model = "anthropic/claude-3-sonnet"
+
+        # Initially should not be cached
+        assert not _is_model_cached_available(model)
+        assert _is_model_cached_unavailable(model) is None
+
+        # Cache as available
+        _cache_model_availability(model, True)
+        assert _is_model_cached_available(model)
+        assert _is_model_cached_unavailable(model) is None
+
+        # Cache as unavailable
+        _cache_model_availability(model, False, "model_not_found")
+        assert not _is_model_cached_available(model)
+        assert _is_model_cached_unavailable(model) == "model_not_found"
+
+    def test_rate_limiting_caching(self) -> None:
+        """Test that rate limiting is cached properly."""
+        from ai_marketplace_monitor.ai import _cache_rate_limit, _is_provider_rate_limited
+
+        provider = "anthropic"
+
+        # Initially should not be rate limited
+        assert not _is_provider_rate_limited(provider)
+
+        # Cache rate limit
+        _cache_rate_limit(provider)
+        assert _is_provider_rate_limited(provider)
+
+    def test_cache_expiration(self) -> None:
+        """Test that cache entries expire properly."""
+        import time
+        from unittest.mock import patch
+
+        from ai_marketplace_monitor.ai import (
+            MODEL_AVAILABILITY_CACHE_DURATION,
+            _cache_model_availability,
+            _is_model_cached_available,
+        )
+
+        model = "test/model"
+
+        # Cache model as available
+        _cache_model_availability(model, True)
+        assert _is_model_cached_available(model)
+
+        # Mock time to simulate cache expiration
+        future_time = time.time() + MODEL_AVAILABILITY_CACHE_DURATION + 1
+        with patch("time.time", return_value=future_time):
+            assert not _is_model_cached_available(model)
+
+    def test_openrouter_model_creation_with_cached_unavailable(self) -> None:
+        """Test that cached unavailable models are rejected early."""
+        from ai_marketplace_monitor.ai import _cache_model_availability, _create_openrouter_model
+
+        config = AIConfig(
+            name="test-openrouter",
+            provider="openrouter",
+            api_key="sk-or-abcdefgh7890abcdefgh7890abcdefgh7890abcdefgh",
+            model="invalid/model",
+        )
+
+        # Cache model as unavailable
+        _cache_model_availability("invalid/model", False, "model_not_found")
+
+        # Should raise ValueError due to cache
+        with pytest.raises(ValueError, match="currently unavailable"):
+            _create_openrouter_model(config)
+
+    def test_openrouter_model_creation_with_rate_limited_provider(self) -> None:
+        """Test that rate limited providers are rejected early."""
+        from ai_marketplace_monitor.ai import _cache_rate_limit, _create_openrouter_model
+
+        config = AIConfig(
+            name="test-openrouter",
+            provider="openrouter",
+            api_key="sk-or-abcdefgh7890abcdefgh7890abcdefgh7890abcdefgh",
+            model="anthropic/claude-3-sonnet",
+        )
+
+        # Cache provider as rate limited
+        _cache_rate_limit("anthropic")
+
+        # Should raise RuntimeError due to rate limit
+        with pytest.raises(RuntimeError, match="currently rate limited"):
+            _create_openrouter_model(config)

@@ -74,6 +74,14 @@ api_key = "sk-or-test789"
 model = "anthropic/claude-3.5-sonnet"
 base_url = "https://openrouter.ai/api/v1"
 """,
+            "openrouter_legacy_format": """
+[ai.openrouter-legacy]
+provider = "openrouter"
+api_key = "sk-or-legacy123"
+model = "openai/gpt-4"
+timeout = 45
+max_retries = 2
+""",
             "mixed_config": """
 [ai.openai-new]
 provider = "openai"
@@ -269,6 +277,96 @@ service_provider = "deepseek"
 
         os.unlink(f.name)
 
+    def test_legacy_openrouter_format_compatibility(
+        self, sample_toml_configs: Dict[str, str]
+    ) -> None:
+        """Test that OpenRouter configurations with legacy format work unchanged."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
+            f.write(sample_toml_configs["openrouter_legacy_format"])
+            f.flush()
+
+            with open(f.name, "rb") as toml_file:
+                data = tomllib.load(toml_file)
+                ai_data = data["ai"]["openrouter-legacy"]
+
+            # Verify OpenRouter config maps to LangChainBackend
+            provider = ai_data["provider"].lower()
+            assert provider in supported_ai_backends
+            assert supported_ai_backends[provider] == LangChainBackend
+
+            # Verify configuration creates valid AIConfig with validation
+            config = LangChainBackend.get_config(
+                name="openrouter-legacy",
+                provider=ai_data["provider"],
+                api_key=ai_data["api_key"],
+                model=ai_data["model"],
+                timeout=ai_data.get("timeout", 30),
+                max_retries=ai_data.get("max_retries", 3),
+            )
+
+            assert isinstance(config, AIConfig)
+            assert config.name == "openrouter-legacy"
+            assert config.provider == "openrouter"
+            assert config.api_key == "sk-or-legacy123"
+            assert config.model == "openai/gpt-4"
+            assert config.timeout == 45
+            assert config.max_retries == 2
+
+        os.unlink(f.name)
+
+    def test_openrouter_environment_key_compatibility(self) -> None:
+        """Test OpenRouter configuration with environment API key works."""
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-or-env-test123"}):
+            config = LangChainBackend.get_config(
+                name="test-openrouter-env",
+                provider="openrouter",
+                model="anthropic/claude-3-haiku",
+            )
+
+            assert isinstance(config, AIConfig)
+            assert config.name == "test-openrouter-env"
+            assert config.provider == "openrouter"
+            assert config.model == "anthropic/claude-3-haiku"
+
+    def test_openrouter_concurrent_configuration_compatibility(self) -> None:
+        """Test OpenRouter configuration works under concurrent access."""
+        results = []
+        exceptions = []
+
+        def create_openrouter_config(thread_id: int):
+            try:
+                config = LangChainBackend.get_config(
+                    name=f"openrouter-thread-{thread_id}",
+                    provider="openrouter",
+                    api_key=f"sk-or-test-{thread_id:03d}",
+                    model="anthropic/claude-3-sonnet",
+                )
+                results.append(config)
+            except Exception as e:
+                exceptions.append(e)
+
+        # Create multiple threads
+        threads = []
+        for i in range(5):
+            thread = threading.Thread(target=create_openrouter_config, args=(i,))
+            threads.append(thread)
+            thread.start()
+
+        # Wait for completion
+        for thread in threads:
+            thread.join()
+
+        # Verify all configurations created successfully
+        assert len(results) == 5
+        assert len(exceptions) == 0
+
+        # Verify each config is unique and correct
+        for i, config in enumerate(results):
+            assert isinstance(config, AIConfig)
+            assert config.provider == "openrouter"
+            assert config.model == "anthropic/claude-3-sonnet"
+            assert config.name == f"openrouter-thread-{i}"
+
 
 class TestErrorMessageConsistency:
     """Test that error messages remain consistent with previous implementations."""
@@ -457,7 +555,10 @@ class TestBackendBehaviorIdentity:
                 cfg = LangChainBackend.get_config(name="test", provider=provider, model="test")
             elif provider == "openrouter":
                 cfg = LangChainBackend.get_config(
-                    name="test", provider=provider, api_key="test", model="test"
+                    name="test",
+                    provider=provider,
+                    api_key="sk-or-test-key",
+                    model="anthropic/claude-3-sonnet",
                 )
 
             assert cfg.provider.lower() == provider.lower()
@@ -646,7 +747,10 @@ class TestEdgeCaseHandling:
                 )
             elif input_provider.lower() == "openrouter":
                 config = LangChainBackend.get_config(
-                    name="test", provider=input_provider, api_key="test", model="test"
+                    name="test",
+                    provider=input_provider,
+                    api_key="sk-or-test-key",
+                    model="anthropic/claude-3-sonnet",
                 )
 
             # Provider is preserved as-is from input
