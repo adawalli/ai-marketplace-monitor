@@ -692,7 +692,7 @@ class LangChainBackend(AIBackend[AIConfig]):
         if hasattr(config, "service_provider") and config.provider:
             warnings.append(
                 "Both 'service_provider' (legacy) and 'provider' (new) are specified. "
-                "Using 'provider' value."
+                "Using 'provider' value. Consider removing 'service_provider' from your config."
             )
 
         # Check for DeepSeek API key migration
@@ -700,8 +700,61 @@ class LangChainBackend(AIBackend[AIConfig]):
             if config.api_key and os.getenv("DEEPSEEK_API_KEY"):
                 warnings.append(
                     "Both config api_key and DEEPSEEK_API_KEY environment variable are set. "
-                    "Using environment variable for better security."
+                    "Using environment variable for better security. "
+                    "Consider removing 'api_key' from config and using environment variable only."
                 )
+            elif config.api_key and not os.getenv("DEEPSEEK_API_KEY"):
+                warnings.append(
+                    "DeepSeek API key in config file. For better security, consider moving to "
+                    "DEEPSEEK_API_KEY environment variable and removing from config file."
+                )
+
+        # Check for OpenAI API key migration
+        if config.provider and config.provider.lower() == "openai":
+            if config.api_key and os.getenv("OPENAI_API_KEY"):
+                warnings.append(
+                    "Both config api_key and OPENAI_API_KEY environment variable are set. "
+                    "Using environment variable for better security. "
+                    "Consider removing 'api_key' from config and using environment variable only."
+                )
+            elif config.api_key and not os.getenv("OPENAI_API_KEY"):
+                warnings.append(
+                    "OpenAI API key in config file. For better security, consider moving to "
+                    "OPENAI_API_KEY environment variable and removing from config file."
+                )
+
+        # Check for OpenRouter API key migration
+        if config.provider and config.provider.lower() == "openrouter":
+            if config.api_key and os.getenv("OPENROUTER_API_KEY"):
+                warnings.append(
+                    "Both config api_key and OPENROUTER_API_KEY environment variable are set. "
+                    "Using environment variable for better security. "
+                    "Consider removing 'api_key' from config and using environment variable only."
+                )
+            elif config.api_key and not os.getenv("OPENROUTER_API_KEY"):
+                warnings.append(
+                    "OpenRouter API key in config file. For better security, consider moving to "
+                    "OPENROUTER_API_KEY environment variable and removing from config file."
+                )
+
+        # Check for deprecated base URLs or common misconfigurations
+        if config.provider and config.provider.lower() == "ollama":
+            if config.base_url and config.base_url != "http://localhost:11434":
+                warnings.append(
+                    f"Custom Ollama base URL detected: {config.base_url}. "
+                    "Ensure this URL is correct for your Ollama installation."
+                )
+            if not config.model:
+                warnings.append(
+                    "No model specified for Ollama. This may cause connection issues. "
+                    "Consider specifying a model like 'llama2' or 'codellama'."
+                )
+
+        # General configuration best practices
+        if config.api_key and len(config.api_key) < 10:
+            warnings.append(
+                "API key appears unusually short. Please verify it's correct and complete."
+            )
 
         # Log warnings if logger is available
         if warnings and self.logger:
@@ -709,6 +762,73 @@ class LangChainBackend(AIBackend[AIConfig]):
                 self.logger.warning(f"Configuration migration: {warning}")
 
         return warnings  # Return for testing purposes
+
+    def _suggest_configuration_improvements(self, config: AIConfig) -> str:
+        """Generate configuration improvement suggestions for users.
+
+        Provides actionable recommendations for optimizing configuration
+        based on current settings and best practices.
+        """
+        suggestions = []
+
+        # Environment variable recommendations by provider
+        if config.provider and config.api_key:
+            provider_lower = config.provider.lower()
+            env_var_map = {
+                "openai": "OPENAI_API_KEY",
+                "deepseek": "DEEPSEEK_API_KEY",
+                "openrouter": "OPENROUTER_API_KEY",
+            }
+
+            if provider_lower in env_var_map:
+                env_var = env_var_map[provider_lower]
+                suggestions.append(
+                    f"Move API key to environment variable {env_var}:\n"
+                    f"  export {env_var}='your_api_key_here'\n"
+                    f"  # Then remove 'api_key' from your config file"
+                )
+
+        # Model recommendations
+        if config.provider:
+            provider_lower = config.provider.lower()
+            if provider_lower == "openai" and not config.model:
+                suggestions.append(
+                    "Consider specifying a model for better performance:\n"
+                    "  model = 'gpt-3.5-turbo'  # Fast and cost-effective\n"
+                    "  # or model = 'gpt-4'     # More capable but slower/costlier"
+                )
+            elif provider_lower == "ollama" and not config.model:
+                suggestions.append(
+                    "Ollama requires a model specification:\n"
+                    "  model = 'llama2'      # General purpose\n"
+                    "  # or model = 'codellama'  # Better for code understanding"
+                )
+            elif provider_lower == "deepseek" and not config.model:
+                suggestions.append(
+                    "Consider specifying a DeepSeek model:\n"
+                    "  model = 'deepseek-coder'  # Optimized for code tasks\n"
+                    "  # or model = 'deepseek-chat'  # General conversation"
+                )
+
+        # Timeout and retry recommendations
+        if config.timeout and config.timeout < 30:
+            suggestions.append(
+                "Consider increasing timeout for AI marketplace analysis:\n"
+                "  timeout = 60  # Allows more time for complex evaluations"
+            )
+
+        if not config.max_retries or config.max_retries < 2:
+            suggestions.append(
+                "Consider enabling retries for better reliability:\n"
+                "  max_retries = 3  # Retry failed requests up to 3 times"
+            )
+
+        if suggestions:
+            header = f"\n--- Configuration Suggestions for {config.name} ---"
+            footer = "--- End Suggestions ---\n"
+            return header + "\n\n" + "\n\n".join(suggestions) + "\n" + footer
+
+        return ""
 
     def _create_prompt_template(self) -> ChatPromptTemplate:
         """Create a structured ChatPromptTemplate for marketplace evaluation."""
@@ -832,6 +952,12 @@ class LangChainBackend(AIBackend[AIConfig]):
 
         # Handle mixed configuration scenarios
         self._validate_mixed_configuration(self.config)
+
+        # Show configuration suggestions if enabled
+        if os.getenv("AI_MARKETPLACE_MONITOR_SHOW_CONFIG_TIPS", "false").lower() == "true":
+            suggestions = self._suggest_configuration_improvements(self.config)
+            if suggestions and self.logger:
+                self.logger.info(suggestions)
 
         with self._model_lock:
             if self._chat_model is None:

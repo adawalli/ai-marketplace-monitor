@@ -217,10 +217,13 @@ class TestLangChainBackendValidation:
 
         warnings = backend._validate_mixed_configuration(config)
 
-        assert len(warnings) == 1
-        assert "service_provider" in warnings[0]
-        assert "Using 'provider' value" in warnings[0]
-        mock_logger.warning.assert_called_once()
+        # Enhanced migration warnings now include additional guidance
+        assert len(warnings) >= 1
+        service_provider_warning = next((w for w in warnings if "service_provider" in w), None)
+        assert service_provider_warning is not None
+        assert "Using 'provider' value" in service_provider_warning
+        assert "Consider removing 'service_provider'" in service_provider_warning
+        assert mock_logger.warning.called
 
     def test_validate_mixed_configuration_deepseek_api_key(self) -> None:
         """Test validation of mixed configuration with DeepSeek API key sources."""
@@ -238,16 +241,19 @@ class TestLangChainBackendValidation:
             mock_logger.warning.assert_called_once()
 
     def test_validate_mixed_configuration_no_conflicts(self) -> None:
-        """Test validation of configuration without conflicts."""
-        config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
+        """Test validation of configuration with minimal conflicts."""
+        # Use environment variables to avoid API key warnings
+        config = AIConfig(name="test-backend", provider="openai")  # No API key in config
 
         mock_logger = Mock()
         backend = LangChainBackend(config, logger=mock_logger)
 
-        warnings = backend._validate_mixed_configuration(config)
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "proper-length-api-key"}):
+            warnings = backend._validate_mixed_configuration(config)
 
-        assert len(warnings) == 0
-        mock_logger.warning.assert_not_called()
+            # Should have no warnings for properly configured environment-based setup
+            assert len(warnings) == 0
+            mock_logger.warning.assert_not_called()
 
     def test_connect_with_enhanced_validation(self) -> None:
         """Test connect method with all enhanced validation steps."""
