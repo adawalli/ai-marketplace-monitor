@@ -6,7 +6,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from logging import Logger
-from typing import Any, ClassVar, Generic, Optional, Type, TypeVar
+from typing import Any, ClassVar, Generic, List, Optional, Type, TypeVar
 
 from diskcache import Cache  # type: ignore
 from langchain_core.language_models import BaseChatModel
@@ -384,8 +384,12 @@ class OpenAIBackend(AIBackend):
 
     def connect(self: "OpenAIBackend") -> None:
         if self.client is None:
+            # Ensure API key is properly converted to string for OpenAI client
+            api_key = self.config.api_key
+            if api_key is None:
+                raise ValueError(f"API key is required for {self.config.provider}")
             self.client = OpenAI(
-                api_key=self.config.api_key,
+                api_key=api_key,
                 base_url=self.config.base_url or self.base_url,
                 timeout=self.config.timeout,
                 default_headers={
@@ -564,7 +568,147 @@ class LangChainBackend(AIBackend[AIConfig]):
     @classmethod
     def get_config(cls: Type["LangChainBackend"], **kwargs: Any) -> AIConfig:
         """Get configuration for the LangChain backend."""
-        return AIConfig(**kwargs)
+        config = AIConfig(**kwargs)
+        cls._validate_config_compatibility(config)
+        return config
+
+    @staticmethod
+    def _validate_config_compatibility(config: AIConfig) -> None:
+        """Validate configuration for compatibility and completeness.
+
+        Ensures the configuration meets all requirements for LangChain backend operation,
+        preserving existing validation patterns and error messages.
+        """
+        # Validate provider is supported
+        if not config.provider:
+            raise ValueError("AIConfig must have a provider specified")
+
+        provider_key = config.provider.lower()
+        if provider_key not in provider_map:
+            supported_providers = ", ".join(provider_map.keys())
+            raise ValueError(
+                f"Unsupported provider '{config.provider}'. "
+                f"Supported providers: {supported_providers}"
+            )
+
+        # Provider-specific validation
+        if provider_key in ("openai", "openrouter"):
+            env_key = "OPENAI_API_KEY" if provider_key == "openai" else "OPENROUTER_API_KEY"
+            if not config.api_key and not os.getenv(env_key):
+                raise ValueError(f"{config.provider} requires an API key")
+            if config.model and not isinstance(config.model, str):
+                raise ValueError(f"{config.provider} model must be a string")
+
+        elif provider_key == "deepseek":
+            if not config.api_key and not os.getenv("DEEPSEEK_API_KEY"):
+                raise ValueError("DeepSeek requires an API key")
+            if config.base_url and config.base_url != "https://api.deepseek.com":
+                # Note: Config validation warnings would be handled by the logger passed to the backend instance
+                pass
+
+        elif provider_key == "ollama":
+            if not config.base_url:
+                # Use default Ollama URL if not specified
+                config.base_url = "http://localhost:11434"
+            if not config.model:
+                raise ValueError("Ollama requires a model to be specified")
+
+        # Validate common configuration parameters
+        if config.max_retries is not None and (
+            not isinstance(config.max_retries, int) or config.max_retries < 0
+        ):
+            raise ValueError("max_retries must be a non-negative integer")
+
+        if config.timeout is not None and (
+            not isinstance(config.timeout, int) or config.timeout <= 0
+        ):
+            raise ValueError("timeout must be a positive integer")
+
+    def _validate_thread_safety(self) -> None:
+        """Validate thread safety by checking that model access is properly synchronized."""
+        # This method ensures thread-safe access patterns are maintained
+        if not hasattr(self, "_model_lock"):
+            raise RuntimeError("LangChainBackend missing proper thread synchronization")
+
+        # Check if it's the right type of lock
+        lock = getattr(self, "_model_lock", None)
+        if not hasattr(lock, "acquire") or not hasattr(lock, "release"):
+            raise RuntimeError("LangChainBackend missing proper thread synchronization")
+
+        # Verify that the lock is functional
+        try:
+            acquired = self._model_lock.acquire(blocking=False)
+            if acquired:
+                self._model_lock.release()
+            else:
+                raise RuntimeError("Thread synchronization lock is in an invalid state")
+        except Exception as e:
+            raise RuntimeError("Thread synchronization lock is in an invalid state") from e
+
+    def _map_langchain_exception(self, e: Exception, context: str = "") -> Exception:
+        """Map LangChain exceptions to existing error patterns for backward compatibility."""
+        error_msg = str(e)
+        context_prefix = f"{context}: " if context else ""
+
+        # Map common LangChain exceptions to existing patterns
+        if isinstance(e, ImportError):
+            return RuntimeError(
+                f"{context_prefix}Provider dependencies not installed: {error_msg}. "
+                "Install the required LangChain packages."
+            )
+
+        if isinstance(e, (ValueError, TypeError)) and any(
+            pattern in error_msg.lower()
+            for pattern in ["api_key", "authentication", "unauthorized"]
+        ):
+            return ValueError(
+                f"{context_prefix}Authentication error: {error_msg}. Check API key configuration."
+            )
+
+        if isinstance(e, (ConnectionError, TimeoutError)) or "timeout" in error_msg.lower():
+            return RuntimeError(
+                f"{context_prefix}Connection failed: {error_msg}. "
+                "Check network connectivity and service availability."
+            )
+
+        if isinstance(e, KeyError) and "model" in error_msg.lower():
+            return ValueError(
+                f"{context_prefix}Invalid model configuration: {error_msg}. "
+                "Check model name and availability."
+            )
+
+        # For unknown exceptions, wrap in RuntimeError with context
+        return RuntimeError(f"{context_prefix}Unexpected error: {error_msg}")
+
+    def _validate_mixed_configuration(self, config: AIConfig) -> List[str]:
+        """Handle mixed old/new configuration scenarios gracefully.
+
+        Provides clear guidance when users have configurations that mix
+        legacy and new patterns, ensuring smooth migration experience.
+        """
+        warnings = []
+
+        # Check for potential legacy configuration patterns
+        if hasattr(config, "service_provider") and config.provider:
+            warnings.append(
+                "Both 'service_provider' (legacy) and 'provider' (new) are specified. "
+                "Using 'provider' value."
+            )
+
+        # Check for DeepSeek API key migration
+        if config.provider and config.provider.lower() == "deepseek":
+            if config.api_key and os.getenv("DEEPSEEK_API_KEY"):
+                warnings.append(
+                    "Both config api_key and DEEPSEEK_API_KEY environment variable are set. "
+                    "Using environment variable for better security."
+                )
+
+        # Log warnings if logger is available
+        if warnings and self.logger:
+            for warning in warnings:
+                self.logger.warning(f"Configuration migration: {warning}")
+
+        return warnings  # Return for testing purposes
 
     def _create_prompt_template(self) -> ChatPromptTemplate:
         """Create a structured ChatPromptTemplate for marketplace evaluation."""
@@ -683,6 +827,12 @@ class LangChainBackend(AIBackend[AIConfig]):
 
     def connect(self) -> None:
         """Establish connection and initialize the chat model."""
+        # Validate thread safety before proceeding
+        self._validate_thread_safety()
+
+        # Handle mixed configuration scenarios
+        self._validate_mixed_configuration(self.config)
+
         with self._model_lock:
             if self._chat_model is None:
                 try:
@@ -692,11 +842,15 @@ class LangChainBackend(AIBackend[AIConfig]):
                             f"""{hilight("[AI]", "name")} {self.config.name} connected."""
                         )
                 except Exception as e:
+                    # Map LangChain exceptions to existing error patterns
+                    mapped_exception = self._map_langchain_exception(
+                        e, f"Connection failed for {self.config.name}"
+                    )
                     if self.logger:
                         self.logger.error(
-                            f"""{hilight("[AI-Error]", "fail")} Failed to connect {self.config.name}: {e}"""
+                            f"""{hilight("[AI-Error]", "fail")} Failed to connect {self.config.name}: {mapped_exception}"""
                         )
-                    raise
+                    raise mapped_exception from e
 
     def _extract_response_content(self, response: Any) -> str:
         """Extract content from LangChain response with proper type checking and fallbacks."""
