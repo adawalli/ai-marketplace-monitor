@@ -2,7 +2,14 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from ai_marketplace_monitor.ai import AIConfig, LangChainBackend, OllamaBackend, OllamaConfig
+from ai_marketplace_monitor.ai import (
+    AIConfig,
+    AIResponse,
+    LangChainBackend,
+    OllamaBackend,
+    OllamaConfig,
+    adapt_langchain_response,
+)
 from ai_marketplace_monitor.facebook import FacebookItemConfig, FacebookMarketplaceConfig
 from ai_marketplace_monitor.listing import Listing
 
@@ -542,3 +549,195 @@ But condition could be better"""
 
                 with pytest.raises(RuntimeError, match="Failed to create model.*chained error"):
                     backend._get_model(config)
+
+
+class TestResponseAdapter:
+    """Test the LangChain response adapter functionality."""
+
+    def test_adapt_langchain_response_basic(self) -> None:
+        """Test adapter with basic LangChain response."""
+        mock_response = Mock()
+        mock_response.content = "Sample response content"
+        mock_response.usage_metadata = {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "total_tokens": 150,
+        }
+        mock_response.response_metadata = {
+            "model": "gpt-4",
+            "provider": "openai",
+        }
+
+        result = adapt_langchain_response(
+            response=mock_response,
+            backend_name="test-backend",
+            parsed_score=4,
+            parsed_comment="Good match",
+        )
+
+        assert result.score == 4
+        assert result.comment == "Good match"
+        assert result.name == "test-backend"
+        assert result.prompt_tokens == 100
+        assert result.completion_tokens == 50
+        assert result.total_tokens == 150
+        assert result.usage_metadata["input_tokens"] == 100
+        assert result.usage_metadata["output_tokens"] == 50
+        assert result.response_metadata["model"] == "gpt-4"
+        assert result.has_token_usage is True
+
+    def test_adapt_langchain_response_no_usage_metadata(self) -> None:
+        """Test adapter with response lacking usage metadata."""
+        mock_response = Mock()
+        mock_response.content = "Sample response content"
+        mock_response.usage_metadata = None
+        mock_response.response_metadata = {"model": "gpt-3.5"}
+
+        result = adapt_langchain_response(
+            response=mock_response,
+            backend_name="test-backend",
+            parsed_score=3,
+            parsed_comment="Average match",
+        )
+
+        assert result.score == 3
+        assert result.comment == "Average match"
+        assert result.name == "test-backend"
+        assert result.prompt_tokens == 0
+        assert result.completion_tokens == 0
+        assert result.total_tokens == 0
+        assert result.usage_metadata == {}
+        assert result.response_metadata["model"] == "gpt-3.5"
+        assert result.has_token_usage is False
+
+    def test_adapt_langchain_response_additional_kwargs_usage(self) -> None:
+        """Test adapter with usage info in additional_kwargs."""
+        mock_response = Mock()
+        mock_response.content = "Sample response content"
+        mock_response.usage_metadata = None
+        mock_response.response_metadata = None
+        mock_response.additional_kwargs = {
+            "usage": {
+                "prompt_tokens": 75,
+                "completion_tokens": 25,
+                "total_tokens": 100,
+            },
+            "model": "deepseek-chat",
+            "_private_field": "should_be_ignored",
+        }
+
+        result = adapt_langchain_response(
+            response=mock_response,
+            backend_name="deepseek-backend",
+            parsed_score=5,
+            parsed_comment="Excellent match",
+        )
+
+        assert result.score == 5
+        assert result.comment == "Excellent match"
+        assert result.name == "deepseek-backend"
+        assert result.prompt_tokens == 75
+        assert result.completion_tokens == 25
+        assert result.total_tokens == 100
+        assert result.usage_metadata["prompt_tokens"] == 75
+        assert result.response_metadata["model"] == "deepseek-chat"
+        assert "_private_field" not in result.response_metadata
+        assert result.has_token_usage is True
+
+    def test_adapt_langchain_response_no_attributes(self) -> None:
+        """Test adapter with minimal response object."""
+        mock_response = Mock()
+        mock_response.content = "Sample response content"
+        # Remove attributes that might not exist on all response types
+        del mock_response.usage_metadata
+        del mock_response.response_metadata
+        del mock_response.additional_kwargs
+
+        result = adapt_langchain_response(
+            response=mock_response,
+            backend_name="minimal-backend",
+            parsed_score=2,
+            parsed_comment="Poor match",
+        )
+
+        assert result.score == 2
+        assert result.comment == "Poor match"
+        assert result.name == "minimal-backend"
+        assert result.prompt_tokens == 0
+        assert result.completion_tokens == 0
+        assert result.total_tokens == 0
+        assert result.usage_metadata == {}
+        assert result.response_metadata == {}
+        assert result.has_token_usage is False
+
+
+class TestAIResponseEnhancements:
+    """Test enhanced AIResponse functionality."""
+
+    def test_ai_response_cost_estimation(self) -> None:
+        """Test cost estimation functionality."""
+        response = AIResponse(
+            score=4,
+            comment="Good match",
+            name="test",
+            prompt_tokens=1000,
+            completion_tokens=500,
+            total_tokens=1500,
+        )
+
+        # Test cost calculation
+        cost = response.get_cost_estimate(prompt_price_per_k=0.01, completion_price_per_k=0.02)
+        expected_cost = (1000 / 1000) * 0.01 + (500 / 1000) * 0.02  # 0.01 + 0.01 = 0.02
+        assert cost == expected_cost
+
+        # Test with no token usage
+        response_no_tokens = AIResponse(score=3, comment="Test", name="test")
+        assert response_no_tokens.get_cost_estimate(0.01, 0.02) == 0.0
+
+    def test_ai_response_backward_compatibility(self) -> None:
+        """Test that enhanced AIResponse maintains backward compatibility."""
+        # Old-style construction (should work with defaults)
+        old_style = AIResponse(score=3, comment="Test", name="backend")
+        assert old_style.prompt_tokens == 0
+        assert old_style.completion_tokens == 0
+        assert old_style.total_tokens == 0
+        assert old_style.usage_metadata == {}
+        assert old_style.response_metadata == {}
+        assert old_style.has_token_usage is False
+
+        # Properties should still work
+        assert old_style.conclusion == "Poor match"
+        assert old_style.style == "name"
+        assert "☆" in old_style.stars  # Should have some empty stars
+
+    def test_ai_response_serialization_compatibility(self) -> None:
+        """Test that enhanced AIResponse works with serialization."""
+        import json
+        from dataclasses import asdict
+
+        enhanced_response = AIResponse(
+            score=4,
+            comment="Great deal",
+            name="test-backend",
+            prompt_tokens=200,
+            completion_tokens=100,
+            total_tokens=300,
+            usage_metadata={"model": "gpt-4", "provider": "openai"},
+            response_metadata={"temperature": 0.7, "max_tokens": 150},
+        )
+
+        # Test serialization
+        serialized = asdict(enhanced_response)
+        assert serialized["prompt_tokens"] == 200
+        assert serialized["usage_metadata"]["model"] == "gpt-4"
+
+        # Test JSON compatibility
+        json_str = json.dumps(serialized)
+        deserialized = json.loads(json_str)
+
+        # Test reconstruction
+        reconstructed = AIResponse(**deserialized)
+        assert reconstructed.score == 4
+        assert reconstructed.prompt_tokens == 200
+        assert reconstructed.usage_metadata["model"] == "gpt-4"
+        assert reconstructed.has_token_usage is True

@@ -35,6 +35,13 @@ class AIResponse:
     score: int
     comment: str
     name: str = ""
+    # Token usage tracking for cost monitoring
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    # Additional metadata from AI responses
+    usage_metadata: Optional[dict] = field(default_factory=dict)
+    response_metadata: Optional[dict] = field(default_factory=dict)
 
     NOT_EVALUATED: ClassVar = "Not evaluated by AI"
 
@@ -66,6 +73,21 @@ class AIResponse:
             '<span style="color: #FFD700; font-size: 20px;">★</span>' * full_stars
             + '<span style="color: #D3D3D3; font-size: 20px;">☆</span>' * empty_stars
         )
+
+    @property
+    def has_token_usage(self: "AIResponse") -> bool:
+        """Check if this response contains token usage information."""
+        return self.total_tokens > 0 or self.prompt_tokens > 0 or self.completion_tokens > 0
+
+    def get_cost_estimate(
+        self: "AIResponse", prompt_price_per_k: float = 0.0, completion_price_per_k: float = 0.0
+    ) -> float:
+        """Estimate cost based on token usage and pricing."""
+        if not self.has_token_usage:
+            return 0.0
+        prompt_cost = (self.prompt_tokens / 1000) * prompt_price_per_k
+        completion_cost = (self.completion_tokens / 1000) * completion_price_per_k
+        return prompt_cost + completion_cost
 
     @classmethod
     def from_cache(
@@ -550,6 +572,79 @@ provider_map = {
     "ollama": _create_ollama_model,
     "openrouter": _create_openrouter_model,
 }
+
+
+def adapt_langchain_response(
+    response: Any,
+    backend_name: str,
+    parsed_score: int,
+    parsed_comment: str,
+) -> AIResponse:
+    """Adapter function to convert LangChain response objects into AIResponse format.
+
+    Extracts token usage, metadata, and content from LangChain responses while
+    maintaining compatibility with existing AIResponse structure and caching.
+
+    Args:
+        response: LangChain chat model response object
+        backend_name: Name of the backend for identification
+        parsed_score: AI rating score (1-5) parsed from response text
+        parsed_comment: AI comment parsed from response text
+
+    Returns:
+        AIResponse object with token usage and metadata preserved
+    """
+    # Initialize token usage values
+    prompt_tokens = 0
+    completion_tokens = 0
+    total_tokens = 0
+    usage_metadata = {}
+    response_metadata = {}
+
+    # Extract usage metadata (token counts) if available
+    if hasattr(response, "usage_metadata") and response.usage_metadata:
+        usage_dict = response.usage_metadata
+        if isinstance(usage_dict, dict):
+            usage_metadata = usage_dict.copy()
+            prompt_tokens = usage_dict.get("input_tokens", 0)
+            completion_tokens = usage_dict.get("output_tokens", 0)
+            total_tokens = usage_dict.get("total_tokens", prompt_tokens + completion_tokens)
+
+    # Extract response metadata (model info, etc.) if available
+    if hasattr(response, "response_metadata") and response.response_metadata:
+        if isinstance(response.response_metadata, dict):
+            response_metadata = response.response_metadata.copy()
+
+    # Handle additional_kwargs which may contain usage info
+    if hasattr(response, "additional_kwargs") and response.additional_kwargs:
+        if isinstance(response.additional_kwargs, dict):
+            # Some providers put usage info in additional_kwargs
+            usage_info = response.additional_kwargs.get("usage", {})
+            if isinstance(usage_info, dict) and not usage_metadata:
+                prompt_tokens = usage_info.get("prompt_tokens", 0)
+                completion_tokens = usage_info.get("completion_tokens", 0)
+                total_tokens = usage_info.get("total_tokens", prompt_tokens + completion_tokens)
+                usage_metadata = usage_info.copy()
+
+            # Merge additional metadata
+            response_metadata.update(
+                {
+                    k: v
+                    for k, v in response.additional_kwargs.items()
+                    if k not in ["usage"] and not k.startswith("_")
+                }
+            )
+
+    return AIResponse(
+        score=parsed_score,
+        comment=parsed_comment,
+        name=backend_name,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens,
+        usage_metadata=usage_metadata,
+        response_metadata=response_metadata,
+    )
 
 
 class LangChainBackend(AIBackend[AIConfig]):
@@ -1074,9 +1169,20 @@ class LangChainBackend(AIBackend[AIConfig]):
         if self.logger:
             self.logger.debug(f"""{hilight("[AI-Response]", "info")} {pretty_repr(response)}""")
 
-        # Extract content using proper type checking with fallbacks
+        # Extract content and parse rating/comment from text
         answer = self._extract_response_content(response)
-        res = self._parse_ai_response(answer, item_config)
+
+        # Parse the text response to extract score and comment
+        parsed_response = self._parse_ai_response(answer, item_config)
+
+        # Use adapter to create enhanced AIResponse with token usage and metadata
+        res = adapt_langchain_response(
+            response=response,
+            backend_name=self.config.name,
+            parsed_score=parsed_response.score,
+            parsed_comment=parsed_response.comment,
+        )
+
         res.to_cache(listing, item_config, marketplace_config)
         counter.increment(CounterItem.NEW_AI_QUERY, item_config.name)
         return res
