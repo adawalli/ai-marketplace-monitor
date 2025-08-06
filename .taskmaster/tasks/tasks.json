@@ -166,8 +166,108 @@
         "dependencies": [
           3
         ],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create LangChainBackend Class Skeleton",
+            "description": "Define the LangChainBackend class inheriting from AIBackend with initial structure, including constructor and placeholder methods.",
+            "dependencies": [],
+            "details": "Set up class with Python 3.10+ features and type hints. Include basic attributes and prepare for integration of provider_map and connection logic.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Implement _get_model Method Using provider_map",
+            "description": "Develop the _get_model(config) method to retrieve the appropriate LangChain chat model instance based on the provider_map from Task 3.",
+            "dependencies": [],
+            "details": "Use the provider_map dictionary to map AIConfig provider values to model constructors. Ensure parameters are passed correctly and handle unknown providers gracefully.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement Connection and Retry Logic",
+            "description": "Add connection setup and retry mechanisms within LangChainBackend to ensure robust model instantiation and API communication.",
+            "dependencies": [],
+            "details": "Incorporate retry policies for transient failures, manage connection state, and ensure thread safety if applicable. Use appropriate exception handling for connection errors.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Integrate Consistent Error Handling",
+            "description": "Implement uniform error handling across LangChainBackend methods to capture, log, and propagate errors consistently.",
+            "dependencies": [],
+            "details": "Define custom exceptions or use existing ones to wrap LangChain and provider errors. Ensure error messages are informative and compatible with existing API expectations.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Preserve Backward Compatibility",
+            "description": "Ensure LangChainBackend maintains the existing API surface, configuration validation, and behavior to support legacy clients and configurations.",
+            "dependencies": [],
+            "details": "Validate inputs against existing schemas, support legacy config fields, and maintain output formats. Coordinate with Task 10 for compatibility testing.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Develop Comprehensive Unit Tests",
+            "description": "Write unit tests covering LangChainBackend instantiation, _get_model functionality, connection and retry logic, error handling, and backward compatibility.",
+            "dependencies": [],
+            "details": "Use various AIConfig inputs to verify correct model retrieval and error scenarios. Mock external dependencies as needed. Ensure tests cover edge cases and integration points.",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 7,
+            "title": "Fix Critical Response Content Extraction",
+            "description": "Improve response content extraction with proper type checking and fallback handling for different LangChain response formats",
+            "details": "Replace fragile hasattr() check with proper type checking for LangChain response objects. Handle response.content, response.text, and other formats. Add logging for unknown response types and ensure consistent behavior across all providers.",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 4
+          },
+          {
+            "id": 8,
+            "title": "Improve Retry Logic Error Handling",
+            "description": "Fix incomplete error handling in retry logic where connect() calls could fail without proper exception handling",
+            "details": "Wrap connect() calls within retry loop in proper try/catch blocks. Handle connection failures gracefully and continue retry attempts. Ensure failed connections don't crash the entire evaluation process.",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 4
+          },
+          {
+            "id": 9,
+            "title": "Address Thread Safety Concerns",
+            "description": "Evaluate and address thread safety issues with shared _chat_model instance variable in multi-threaded scenarios",
+            "details": "Analyze thread safety implications of _chat_model being reset by one thread affecting others. Consider thread-local storage, connection pooling, or instance-per-thread patterns. Document thread safety guarantees and add appropriate safeguards.",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 4
+          },
+          {
+            "id": 10,
+            "title": "Extract Common Response Parsing Logic",
+            "description": "Eliminate code duplication by extracting shared response parsing logic into reusable methods",
+            "details": "The response parsing logic (rating extraction, comment processing) is duplicated from OpenAIBackend. Extract this into a shared base method or utility function to reduce maintenance burden and ensure consistency across backends.",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 4
+          },
+          {
+            "id": 11,
+            "title": "Enhance Provider Factory Exception Handling",
+            "description": "Improve provider factory error handling to preserve debugging information and provide more specific error messages",
+            "details": "Replace generic Exception catching with more specific exception types. Preserve original exception details for debugging. Provide provider-specific error messages for common failures (API key issues, network problems, invalid configurations).",
+            "status": "done",
+            "dependencies": [],
+            "parentTaskId": 4
+          }
+        ]
       },
       {
         "id": 5,
@@ -285,7 +385,7 @@
     ],
     "metadata": {
       "created": "2025-08-06T00:33:31.026Z",
-      "updated": "2025-08-06T01:01:08.293Z",
+      "updated": "2025-08-06T01:21:35.907Z",
       "description": "Tasks for master context"
     }
   }

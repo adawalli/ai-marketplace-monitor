@@ -1,7 +1,5 @@
 """Tests for provider mapping system in ai.py."""
 
-# ruff: noqa: ANN101
-
 import os
 from unittest.mock import patch
 
