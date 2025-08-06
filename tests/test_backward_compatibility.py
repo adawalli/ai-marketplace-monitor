@@ -17,9 +17,9 @@ Key validation areas:
 
 import os
 import sys
-import tempfile
 import threading
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Dict
 from unittest.mock import Mock, patch
 
@@ -96,223 +96,210 @@ service_provider = "deepseek"
 """,
         }
 
-    def test_legacy_openai_config_compatibility(self, sample_toml_configs: Dict[str, str]) -> None:
+    def test_legacy_openai_config_compatibility(
+        self, sample_toml_configs: Dict[str, str], tmp_path: Path
+    ) -> None:
         """Test that legacy OpenAI configurations work unchanged."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(sample_toml_configs["openai_legacy"])
-            f.flush()
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(sample_toml_configs["openai_legacy"])
 
-            # Simulate reading TOML and extracting AI config
+        # Simulate reading TOML and extracting AI config
+        with open(config_file, "rb") as toml_file:
+            data = tomllib.load(toml_file)
+            ai_data = data["ai"]["chatgpt"]
 
-            with open(f.name, "rb") as toml_file:
-                data = tomllib.load(toml_file)
-                ai_data = data["ai"]["chatgpt"]
+        # Verify legacy config maps to LangChainBackend
+        provider = ai_data["provider"].lower()
+        assert provider in supported_ai_backends
+        assert supported_ai_backends[provider] == LangChainBackend
 
-            # Verify legacy config maps to LangChainBackend
-            provider = ai_data["provider"].lower()
-            assert provider in supported_ai_backends
-            assert supported_ai_backends[provider] == LangChainBackend
+        # Verify configuration creates valid AIConfig
+        config = LangChainBackend.get_config(
+            name="chatgpt",
+            provider=ai_data["provider"],
+            api_key=ai_data["api_key"],
+            model=ai_data["model"],
+            timeout=ai_data.get("timeout", 30),
+            max_retries=ai_data.get("max_retries", 3),
+        )
 
-            # Verify configuration creates valid AIConfig
-            config = LangChainBackend.get_config(
-                name="chatgpt",
-                provider=ai_data["provider"],
-                api_key=ai_data["api_key"],
-                model=ai_data["model"],
-                timeout=ai_data.get("timeout", 30),
-                max_retries=ai_data.get("max_retries", 3),
-            )
-
-            assert isinstance(config, AIConfig)
-            assert config.name == "chatgpt"
-            assert config.provider == "openai"
-            assert config.api_key == "sk-test123"
-            assert config.model == "gpt-4"
-            assert config.timeout == 30
-            assert config.max_retries == 3
-
-        os.unlink(f.name)
+        assert isinstance(config, AIConfig)
+        assert config.name == "chatgpt"
+        assert config.provider == "openai"
+        assert config.api_key == "sk-test123"
+        assert config.model == "gpt-4"
+        assert config.timeout == 30
+        assert config.max_retries == 3
 
     def test_legacy_deepseek_config_compatibility(
-        self, sample_toml_configs: Dict[str, str]
+        self, sample_toml_configs: Dict[str, str], tmp_path: Path
     ) -> None:
         """Test that legacy DeepSeek configurations work unchanged."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(sample_toml_configs["deepseek_legacy"])
-            f.flush()
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(sample_toml_configs["deepseek_legacy"])
 
-            with open(f.name, "rb") as toml_file:
-                data = tomllib.load(toml_file)
-                ai_data = data["ai"]["deepseek-chat"]
+        with open(config_file, "rb") as toml_file:
+            data = tomllib.load(toml_file)
+            ai_data = data["ai"]["deepseek-chat"]
 
-            # Verify legacy config maps to LangChainBackend
-            provider = ai_data["provider"].lower()
-            assert provider in supported_ai_backends
-            assert supported_ai_backends[provider] == LangChainBackend
+        # Verify legacy config maps to LangChainBackend
+        provider = ai_data["provider"].lower()
+        assert provider in supported_ai_backends
+        assert supported_ai_backends[provider] == LangChainBackend
 
-            # Test with both config API key and environment variable
-            with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "env-key"}):
-                config = LangChainBackend.get_config(
-                    name="deepseek-chat",
-                    provider=ai_data["provider"],
-                    api_key=ai_data.get("api_key"),
-                    model=ai_data["model"],
-                    base_url=ai_data.get("base_url"),
-                )
-
-                assert isinstance(config, AIConfig)
-                assert config.name == "deepseek-chat"
-                assert config.provider == "deepseek"
-                assert config.model == "deepseek-chat"
-
-        os.unlink(f.name)
-
-    def test_legacy_ollama_config_compatibility(self, sample_toml_configs: Dict[str, str]) -> None:
-        """Test that legacy Ollama configurations work unchanged."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(sample_toml_configs["ollama_legacy"])
-            f.flush()
-
-            with open(f.name, "rb") as toml_file:
-                data = tomllib.load(toml_file)
-                ai_data = data["ai"]["llama"]
-
-            # Verify legacy config maps to LangChainBackend
-            provider = ai_data["provider"].lower()
-            assert provider in supported_ai_backends
-            assert supported_ai_backends[provider] == LangChainBackend
-
-            # Verify configuration creates valid AIConfig
+        # Test with both config API key and environment variable
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "env-key"}):
             config = LangChainBackend.get_config(
-                name="llama",
+                name="deepseek-chat",
                 provider=ai_data["provider"],
+                api_key=ai_data.get("api_key"),
                 model=ai_data["model"],
                 base_url=ai_data.get("base_url"),
-                timeout=ai_data.get("timeout", 30),
             )
 
             assert isinstance(config, AIConfig)
-            assert config.name == "llama"
-            assert config.provider == "ollama"
-            assert config.model == "deepseek-r1:14b"
-            assert config.base_url == "http://localhost:11434"
-            assert config.timeout == 60
+            assert config.name == "deepseek-chat"
+            assert config.provider == "deepseek"
+            assert config.model == "deepseek-chat"
 
-        os.unlink(f.name)
+    def test_legacy_ollama_config_compatibility(
+        self, sample_toml_configs: Dict[str, str], tmp_path: Path
+    ) -> None:
+        """Test that legacy Ollama configurations work unchanged."""
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(sample_toml_configs["ollama_legacy"])
+
+        with open(config_file, "rb") as toml_file:
+            data = tomllib.load(toml_file)
+            ai_data = data["ai"]["llama"]
+
+        # Verify legacy config maps to LangChainBackend
+        provider = ai_data["provider"].lower()
+        assert provider in supported_ai_backends
+        assert supported_ai_backends[provider] == LangChainBackend
+
+        # Verify configuration creates valid AIConfig
+        config = LangChainBackend.get_config(
+            name="llama",
+            provider=ai_data["provider"],
+            model=ai_data["model"],
+            base_url=ai_data.get("base_url"),
+            timeout=ai_data.get("timeout", 30),
+        )
+
+        assert isinstance(config, AIConfig)
+        assert config.name == "llama"
+        assert config.provider == "ollama"
+        assert config.model == "deepseek-r1:14b"
+        assert config.base_url == "http://localhost:11434"
+        assert config.timeout == 60
 
     def test_new_openrouter_config_compatibility(
-        self, sample_toml_configs: Dict[str, str]
+        self, sample_toml_configs: Dict[str, str], tmp_path: Path
     ) -> None:
         """Test that new OpenRouter configurations work with compatibility layer."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(sample_toml_configs["openrouter_new"])
-            f.flush()
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(sample_toml_configs["openrouter_new"])
 
-            with open(f.name, "rb") as toml_file:
-                data = tomllib.load(toml_file)
-                ai_data = data["ai"]["router"]
+        with open(config_file, "rb") as toml_file:
+            data = tomllib.load(toml_file)
+            ai_data = data["ai"]["router"]
 
-            # Verify new provider maps to LangChainBackend
-            provider = ai_data["provider"].lower()
-            assert provider in supported_ai_backends
-            assert supported_ai_backends[provider] == LangChainBackend
+        # Verify new provider maps to LangChainBackend
+        provider = ai_data["provider"].lower()
+        assert provider in supported_ai_backends
+        assert supported_ai_backends[provider] == LangChainBackend
 
-            # Verify configuration creates valid AIConfig
-            config = LangChainBackend.get_config(
-                name="router",
-                provider=ai_data["provider"],
-                api_key=ai_data["api_key"],
-                model=ai_data["model"],
-                base_url=ai_data.get("base_url"),
-            )
+        # Verify configuration creates valid AIConfig
+        config = LangChainBackend.get_config(
+            name="router",
+            provider=ai_data["provider"],
+            api_key=ai_data["api_key"],
+            model=ai_data["model"],
+            base_url=ai_data.get("base_url"),
+        )
 
-            assert isinstance(config, AIConfig)
-            assert config.name == "router"
-            assert config.provider == "openrouter"
-            assert config.api_key == "sk-or-test789"
-            assert config.model == "anthropic/claude-3.5-sonnet"
-            assert config.base_url == "https://openrouter.ai/api/v1"
+        assert isinstance(config, AIConfig)
+        assert config.name == "router"
+        assert config.provider == "openrouter"
+        assert config.api_key == "sk-or-test789"
+        assert config.model == "anthropic/claude-3.5-sonnet"
+        assert config.base_url == "https://openrouter.ai/api/v1"
 
-        os.unlink(f.name)
-
-    def test_mixed_configuration_handling(self, sample_toml_configs: Dict[str, str]) -> None:
+    def test_mixed_configuration_handling(
+        self, sample_toml_configs: Dict[str, str], tmp_path: Path
+    ) -> None:
         """Test handling of mixed old/new configuration scenarios."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(sample_toml_configs["mixed_config"])
-            f.flush()
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(sample_toml_configs["mixed_config"])
 
-            with open(f.name, "rb") as toml_file:
-                data = tomllib.load(toml_file)
+        with open(config_file, "rb") as toml_file:
+            data = tomllib.load(toml_file)
 
-                # Test modern OpenAI config
-                openai_data = data["ai"]["openai-new"]
-                config1 = LangChainBackend.get_config(
-                    name="openai-new",
-                    provider=openai_data["provider"],
-                    api_key=openai_data["api_key"],
-                    model=openai_data["model"],
-                )
-                assert config1.provider == "openai"
+            # Test modern OpenAI config
+            openai_data = data["ai"]["openai-new"]
+            config1 = LangChainBackend.get_config(
+                name="openai-new",
+                provider=openai_data["provider"],
+                api_key=openai_data["api_key"],
+                model=openai_data["model"],
+            )
+            assert config1.provider == "openai"
 
-                # Test legacy DeepSeek config with deprecated field
-                deepseek_data = data["ai"]["deepseek-old"]
-                mock_logger = Mock()
+            # Test legacy DeepSeek config with deprecated field
+            deepseek_data = data["ai"]["deepseek-old"]
+            mock_logger = Mock()
 
-                # Create backend to test mixed validation
-                temp_config = AIConfig(
-                    name="deepseek-old",
-                    provider=deepseek_data["provider"],
-                    api_key=deepseek_data["api_key"],
-                    model=deepseek_data["model"],
-                )
-                # Simulate legacy field
-                temp_config.service_provider = deepseek_data.get("service_provider")
+            # Create backend to test mixed validation
+            temp_config = AIConfig(
+                name="deepseek-old",
+                provider=deepseek_data["provider"],
+                api_key=deepseek_data["api_key"],
+                model=deepseek_data["model"],
+            )
+            # Simulate legacy field
+            temp_config.service_provider = deepseek_data.get("service_provider")
 
-                backend = LangChainBackend(temp_config, logger=mock_logger)
-                warnings = backend._validate_mixed_configuration(temp_config)
+            backend = LangChainBackend(temp_config, logger=mock_logger)
+            warnings = backend._validate_mixed_configuration(temp_config)
 
-                # Should detect legacy field usage
-                assert len(warnings) > 0
-                assert any("service_provider" in warning for warning in warnings)
-
-        os.unlink(f.name)
+            # Should detect legacy field usage
+            assert len(warnings) > 0
+            assert any("service_provider" in warning for warning in warnings)
 
     def test_legacy_openrouter_format_compatibility(
-        self, sample_toml_configs: Dict[str, str]
+        self, sample_toml_configs: Dict[str, str], tmp_path: Path
     ) -> None:
         """Test that OpenRouter configurations with legacy format work unchanged."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
-            f.write(sample_toml_configs["openrouter_legacy_format"])
-            f.flush()
+        config_file = tmp_path / "config.toml"
+        config_file.write_text(sample_toml_configs["openrouter_legacy_format"])
 
-            with open(f.name, "rb") as toml_file:
-                data = tomllib.load(toml_file)
-                ai_data = data["ai"]["openrouter-legacy"]
+        with open(config_file, "rb") as toml_file:
+            data = tomllib.load(toml_file)
+            ai_data = data["ai"]["openrouter-legacy"]
 
-            # Verify OpenRouter config maps to LangChainBackend
-            provider = ai_data["provider"].lower()
-            assert provider in supported_ai_backends
-            assert supported_ai_backends[provider] == LangChainBackend
+        # Verify OpenRouter config maps to LangChainBackend
+        provider = ai_data["provider"].lower()
+        assert provider in supported_ai_backends
+        assert supported_ai_backends[provider] == LangChainBackend
 
-            # Verify configuration creates valid AIConfig with validation
-            config = LangChainBackend.get_config(
-                name="openrouter-legacy",
-                provider=ai_data["provider"],
-                api_key=ai_data["api_key"],
-                model=ai_data["model"],
-                timeout=ai_data.get("timeout", 30),
-                max_retries=ai_data.get("max_retries", 3),
-            )
+        # Verify configuration creates valid AIConfig with validation
+        config = LangChainBackend.get_config(
+            name="openrouter-legacy",
+            provider=ai_data["provider"],
+            api_key=ai_data["api_key"],
+            model=ai_data["model"],
+            timeout=ai_data.get("timeout", 30),
+            max_retries=ai_data.get("max_retries", 3),
+        )
 
-            assert isinstance(config, AIConfig)
-            assert config.name == "openrouter-legacy"
-            assert config.provider == "openrouter"
-            assert config.api_key == "sk-or-legacy123"
-            assert config.model == "openai/gpt-4"
-            assert config.timeout == 45
-            assert config.max_retries == 2
-
-        os.unlink(f.name)
+        assert isinstance(config, AIConfig)
+        assert config.name == "openrouter-legacy"
+        assert config.provider == "openrouter"
+        assert config.api_key == "sk-or-legacy123"
+        assert config.model == "openai/gpt-4"
+        assert config.timeout == 45
+        assert config.max_retries == 2
 
     def test_openrouter_environment_key_compatibility(self) -> None:
         """Test OpenRouter configuration with environment API key works."""

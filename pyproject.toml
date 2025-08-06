@@ -194,6 +194,7 @@ line-length = 99
 target-version = ["py39"]
 
 [tool.mypy]
+mypy_path = "src"
 warn_return_any = false
 warn_unused_configs = true
 

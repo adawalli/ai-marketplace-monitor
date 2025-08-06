@@ -1616,7 +1616,8 @@ class LangChainBackend(AIBackend[AIConfig]):
                 # Thread-safe access to model
                 with self._model_lock:
                     current_model = self._chat_model
-                    assert current_model is not None
+                    if current_model is None:
+                        raise ValueError("Chat model is not initialized")
 
                 # Create structured prompt template and format it
                 prompt_template = self._create_prompt_template()
