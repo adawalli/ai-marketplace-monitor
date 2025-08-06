@@ -9,10 +9,10 @@ from logging import Logger
 from typing import Any, ClassVar, Generic, Optional, Type, TypeVar
 
 from diskcache import Cache  # type: ignore
-from langchain_community.chat_models import ChatOllama
 from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_deepseek import ChatDeepSeek
+from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from openai import OpenAI  # type: ignore
 from pydantic import SecretStr
@@ -528,11 +528,15 @@ def _create_deepseek_model(config: AIConfig) -> BaseChatModel:
 
 def _create_ollama_model(config: AIConfig) -> BaseChatModel:
     """Create a ChatOllama model instance from AIConfig."""
+    # Prepare client kwargs with timeout if specified
+    client_kwargs = {}
+    if config.timeout is not None:
+        client_kwargs["timeout"] = config.timeout
     return ChatOllama(
         model=config.model or "deepseek-r1:14b",
         base_url=config.base_url or "http://localhost:11434",
-        timeout=config.timeout,
         num_ctx=4096,  # Default context length
+        client_kwargs=client_kwargs if client_kwargs else None,
     )
 
 
@@ -578,18 +582,14 @@ class LangChainBackend(AIBackend[AIConfig]):
         # HTML escape to prevent script injection
         sanitized = html.escape(text, quote=True)
 
-        # Remove or replace potentially dangerous patterns
+        # Filter only clear prompt injection attempts (more conservative approach)
+        # Focus on patterns that are unlikely to appear in legitimate marketplace listings
         dangerous_patterns = [
-            # System message injection attempts
-            (r"\[SYSTEM\]|\<system\>|\<\|system\|\>", "[USER INPUT]"),
-            # Role injection attempts
-            (r"\[ASSISTANT\]|\<assistant\>|\<\|assistant\|\>", "[USER INPUT]"),
-            (r"\[USER\]|\<user\>|\<\|user\|\>", "[USER INPUT]"),
-            # Instruction injection attempts
-            (r"ignore.{0,20}(previous|above|prior).{0,20}instruction", "[FILTERED]"),
-            (r"new.{0,20}instruction.{0,20}:", "[FILTERED]"),
-            (r"system.{0,20}prompt.{0,20}:", "[FILTERED]"),
-            # Excessive newlines that might break prompt structure
+            # Only filter exact system tokens that are clearly injection attempts
+            (r"\[SYSTEM\]|\<\|system\|\>", "[USER INPUT]"),
+            (r"\[ASSISTANT\]|\<\|assistant\|\>", "[USER INPUT]"),
+            (r"\[USER\]|\<\|user\|\>", "[USER INPUT]"),
+            # Limit newlines to prevent prompt structure breaking
             (r"\n{5,}", "\n\n"),
         ]
 

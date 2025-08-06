@@ -4,9 +4,9 @@ import os
 from unittest.mock import patch
 
 import pytest
-from langchain_community.chat_models import ChatOllama
 from langchain_core.language_models import BaseChatModel
 from langchain_deepseek import ChatDeepSeek
+from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 
 from ai_marketplace_monitor.ai import (
@@ -209,7 +209,7 @@ class TestOllamaProviderMapping:
         assert isinstance(model, ChatOllama)
         assert model.model == "deepseek-r1:14b"
         assert model.base_url == "http://localhost:11434"
-        assert model.timeout == 60
+        assert model.client_kwargs == {"timeout": 60}
         assert model.num_ctx == 4096  # Default context length
 
     def test_create_ollama_model_with_defaults(self) -> None:

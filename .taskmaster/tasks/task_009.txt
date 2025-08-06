@@ -1,0 +1,11 @@
+# Task ID: 9
+# Title: Integrate Caching with LangChainBackend
+# Status: pending
+# Dependencies: 7, 4
+# Priority: medium
+# Description: Ensure AIResponse caching works seamlessly with the new LangChainBackend and response adapter layer.
+# Details:
+Modify caching logic to accept AIResponse objects produced by the adapter layer. Verify serialization format is unchanged. Test cache retrieval and reuse with LangChainBackend responses. Handle cache invalidation and expiration as before.
+
+# Test Strategy:
+Run integration tests with cached responses to verify cache hits and misses behave identically to previous backend implementations.

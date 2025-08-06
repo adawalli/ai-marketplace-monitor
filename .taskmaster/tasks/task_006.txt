@@ -1,0 +1,11 @@
+# Task ID: 6
+# Title: Integrate OpenRouter Provider
+# Status: pending
+# Dependencies: 3, 5
+# Priority: medium
+# Description: Add OpenRouter as a new provider type using ChatOpenAI with custom base_url and headers, enabling access to 200+ AI models.
+# Details:
+Implement OpenRouter provider mapping in LangChainBackend using ChatOpenAI with base_url='https://openrouter.ai/api/v1' and headers {'HTTP-Referer': 'https://ai-marketplace-monitor', 'X-Title': 'AI Marketplace Monitor'}. Update config parser to accept provider='openrouter' and model names like 'anthropic/claude-3-sonnet'. Validate API key presence.
+
+# Test Strategy:
+Unit test OpenRouter provider instantiation and API call simulation. Validate config parsing and error handling for missing or invalid keys.

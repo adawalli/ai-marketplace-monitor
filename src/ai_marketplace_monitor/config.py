@@ -11,7 +11,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-from .ai import DeepSeekBackend, OllamaBackend, OpenAIBackend, TAIConfig
+from .ai import LangChainBackend, TAIConfig
 from .facebook import FacebookMarketplace
 from .marketplace import TItemConfig, TMarketplaceConfig
 from .notification import NotificationConfig
@@ -20,10 +20,13 @@ from .user import User, UserConfig
 from .utils import MonitorConfig, Translator, hilight, merge_dicts
 
 supported_marketplaces = {"facebook": FacebookMarketplace}
+# Configuration compatibility layer: All AI providers now route through
+# LangChainBackend while preserving existing TOML configuration format
 supported_ai_backends = {
-    "deepseek": DeepSeekBackend,
-    "openai": OpenAIBackend,
-    "ollama": OllamaBackend,
+    "deepseek": LangChainBackend,  # Mapped to _create_deepseek_model
+    "openai": LangChainBackend,  # Mapped to _create_openai_model
+    "ollama": LangChainBackend,  # Mapped to _create_ollama_model
+    "openrouter": LangChainBackend,  # Mapped to _create_openrouter_model
 }
 
 

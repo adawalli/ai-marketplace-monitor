@@ -1,0 +1,11 @@
+# Task ID: 11
+# Title: Implement Optional LangSmith Integration
+# Status: pending
+# Dependencies: 4
+# Priority: medium
+# Description: Add optional integration with LangSmith platform for advanced tracing, observability, and cost monitoring enabled via environment variables.
+# Details:
+Integrate langsmith package to automatically trace all LangChain LLM calls when LANGSMITH_TRACING=true and LANGSMITH_API_KEY are set. No code changes needed for tracing calls; configure environment and initialize LangSmith client if enabled. Document setup instructions. Ensure no impact if environment variables are absent.
+
+# Test Strategy:
+Test with LANGSMITH_TRACING enabled and disabled. Verify traces appear in LangSmith dashboard and no errors occur when disabled.
