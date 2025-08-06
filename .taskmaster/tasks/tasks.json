@@ -1,0 +1,174 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Install and Configure LangChain Dependencies",
+        "description": "Install required LangChain packages with specified version constraints and configure environment for Python 3.10+ compatibility.",
+        "details": "Use pip to install langchain-core>=0.3.5,<0.4.0, langchain-openai>=0.3.5,<0.4.0, langchain-community>=0.0.10,<0.1.0, langchain-deepseek (latest compatible), and optionally langsmith for tracing. Verify Python 3.10+ environment. Pin versions to avoid breaking changes. Validate installation by importing packages and running basic version checks.",
+        "testStrategy": "Write unit tests to import each package and instantiate minimal objects (e.g., ChatOpenAI) to confirm correct installation and compatibility.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Define Provider Interface Contract",
+        "description": "Create an abstract base class defining the interface for all AI providers to standardize model retrieval, config mapping, error handling, and response adaptation.",
+        "details": "Implement ProviderInterface ABC with methods get_model(config), map_config(config), handle_errors(error), and adapt_response(langchain_response) as per PRD. Use typing and langchain_core.language_models.BaseChatModel for type hints. This interface will guide implementation of provider-specific logic in LangChainBackend.",
+        "testStrategy": "Write interface compliance tests using mock subclasses to ensure all abstract methods are implemented and raise errors if not.",
+        "priority": "high",
+        "dependencies": [
+          1
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Implement Provider Mapping System",
+        "description": "Develop core logic to map AIConfig provider values to corresponding LangChain chat model constructors with appropriate parameters.",
+        "details": "Create a provider_map dictionary mapping 'openai', 'deepseek', 'ollama', and 'openrouter' to lambda functions returning configured LangChain chat models. For OpenRouter, use ChatOpenAI with custom base_url and headers. DeepSeek uses langchain-deepseek package and environment variable for API key. Ensure mapping respects existing TOML config fields and environment variables.",
+        "testStrategy": "Unit test each provider mapping by passing sample AIConfig objects and verifying returned model instances and parameters match expectations.",
+        "priority": "high",
+        "dependencies": [
+          2
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Develop LangChainBackend Base Class",
+        "description": "Create the unified LangChainBackend class replacing existing backend classes, implementing connection handling and model retrieval using provider mapping.",
+        "details": "Implement LangChainBackend inheriting from AIBackend. Implement _get_model(config) method to use provider_map from Task 3. Handle connection setup, retries, and consistent error handling. Ensure backward compatibility by preserving API surface and config validation. Use Python 3.10+ features and type hints.",
+        "testStrategy": "Write unit tests to instantiate LangChainBackend with various AIConfig inputs and verify correct model retrieval and error handling behavior.",
+        "priority": "high",
+        "dependencies": [
+          3
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Implement Configuration Compatibility Layer",
+        "description": "Ensure all existing TOML configurations work unchanged by internally mapping them to LangChain models and preserving config validation and error handling.",
+        "details": "Extend configuration parser to recognize existing [ai.name] sections and map provider strings to LangChainBackend provider_map keys. Preserve existing validation logic and error messages. Handle DeepSeek API key migration to environment variable DEEPSEEK_API_KEY transparently. Maintain Config.get_ai_config() API unchanged.",
+        "testStrategy": "Run backward compatibility tests using existing TOML config files to verify no changes needed and errors are consistent with prior behavior.",
+        "priority": "high",
+        "dependencies": [
+          4
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Integrate OpenRouter Provider",
+        "description": "Add OpenRouter as a new provider type using ChatOpenAI with custom base_url and headers, enabling access to 200+ AI models.",
+        "details": "Implement OpenRouter provider mapping in LangChainBackend using ChatOpenAI with base_url='https://openrouter.ai/api/v1' and headers {'HTTP-Referer': 'https://ai-marketplace-monitor', 'X-Title': 'AI Marketplace Monitor'}. Update config parser to accept provider='openrouter' and model names like 'anthropic/claude-3-sonnet'. Validate API key presence.",
+        "testStrategy": "Unit test OpenRouter provider instantiation and API call simulation. Validate config parsing and error handling for missing or invalid keys.",
+        "priority": "medium",
+        "dependencies": [
+          3,
+          5
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Create Response Adapter Layer",
+        "description": "Develop adapter to convert LangChain response objects into existing AIResponse format to maintain cache compatibility and API consistency.",
+        "details": "Implement adapter functions or classes that take LangChain chat model responses and produce AIResponse objects identical in structure and serialization to existing ones. Handle token usage, message content, and metadata. Ensure serialization/deserialization compatibility with existing cache system.",
+        "testStrategy": "Test adapter with mocked LangChain responses and verify output matches expected AIResponse objects. Test cache serialization round-trip with adapted responses.",
+        "priority": "high",
+        "dependencies": [
+          4
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Implement LangChain Exception Mapping",
+        "description": "Map LangChain exceptions to existing error patterns to preserve current error handling behavior across all providers.",
+        "details": "Create exception mapping layer that catches LangChain exceptions and raises corresponding existing SDK exceptions or error types. Maintain error messages and codes consistent with prior implementation. Integrate this mapping into LangChainBackend methods.",
+        "testStrategy": "Write tests that simulate LangChain exceptions and verify correct mapped exceptions are raised with expected messages.",
+        "priority": "high",
+        "dependencies": [
+          4
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Integrate Caching with LangChainBackend",
+        "description": "Ensure AIResponse caching works seamlessly with the new LangChainBackend and response adapter layer.",
+        "details": "Modify caching logic to accept AIResponse objects produced by the adapter layer. Verify serialization format is unchanged. Test cache retrieval and reuse with LangChainBackend responses. Handle cache invalidation and expiration as before.",
+        "testStrategy": "Run integration tests with cached responses to verify cache hits and misses behave identically to previous backend implementations.",
+        "priority": "medium",
+        "dependencies": [
+          7,
+          4
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "Develop Backward Compatibility Test Suite",
+        "description": "Create comprehensive test suite to validate that all existing TOML configurations, cached data, and error handling patterns remain fully compatible after migration.",
+        "details": "Implement tests that load existing TOML config files and cached AIResponse objects, run evaluations through LangChainBackend, and compare outputs to prior results. Include tests for DeepSeek environment variable migration. Validate error handling consistency. Automate tests to run in CI.",
+        "testStrategy": "Use real marketplace data and configurations to verify zero breaking changes. Compare outputs byte-for-byte where applicable. Monitor logs for unexpected errors.",
+        "priority": "high",
+        "dependencies": [
+          5,
+          7,
+          8,
+          9
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 11,
+        "title": "Implement Optional LangSmith Integration",
+        "description": "Add optional integration with LangSmith platform for advanced tracing, observability, and cost monitoring enabled via environment variables.",
+        "details": "Integrate langsmith package to automatically trace all LangChain LLM calls when LANGSMITH_TRACING=true and LANGSMITH_API_KEY are set. No code changes needed for tracing calls; configure environment and initialize LangSmith client if enabled. Document setup instructions. Ensure no impact if environment variables are absent.",
+        "testStrategy": "Test with LANGSMITH_TRACING enabled and disabled. Verify traces appear in LangSmith dashboard and no errors occur when disabled.",
+        "priority": "medium",
+        "dependencies": [
+          4
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 12,
+        "title": "Update Internal Documentation and Developer Guides",
+        "description": "Revise all internal documentation to reflect new LangChainBackend architecture, provider mappings, configuration compatibility, and optional LangSmith integration.",
+        "details": "Update README, developer guides, and inline code documentation to describe new backend usage, configuration syntax preservation, provider support including OpenRouter, and optional LangSmith tracing. Include migration notes and troubleshooting tips. Ensure documentation is clear and accessible for future maintenance.",
+        "testStrategy": "Conduct documentation review sessions with developers unfamiliar with the migration. Collect feedback and update accordingly. Verify documentation accuracy against implemented code.",
+        "priority": "medium",
+        "dependencies": [
+          4,
+          5,
+          6,
+          7,
+          11
+        ],
+        "status": "pending",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-08-06T00:33:31.026Z",
+      "updated": "2025-08-06T00:33:31.026Z",
+      "description": "Tasks for master context"
+    }
+  }
+}
