@@ -1,3 +1,4 @@
+import html
 import os
 import re
 import threading
@@ -10,9 +11,11 @@ from typing import Any, ClassVar, Generic, Optional, Type, TypeVar
 from diskcache import Cache  # type: ignore
 from langchain_community.chat_models import ChatOllama
 from langchain_core.language_models import BaseChatModel
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_deepseek import ChatDeepSeek
 from langchain_openai import ChatOpenAI
 from openai import OpenAI  # type: ignore
+from pydantic import SecretStr
 from rich.pretty import pretty_repr
 
 from .listing import Listing
@@ -155,6 +158,43 @@ class OllamaConfig(OpenAIConfig):
             raise ValueError("Ollama requires a string model.")
 
 
+# System message for marketplace evaluation
+MARKETPLACE_EVALUATION_SYSTEM_MESSAGE = """You are a marketplace listing evaluation expert. Your role is to assess how well Facebook Marketplace listings match user search criteria.
+
+You should evaluate listings based on:
+- Relevance to search terms and description
+- Price reasonability vs. market value
+- Item condition and seller credibility
+- Completeness of listing information
+
+Always conclude your evaluation with "Rating X:" where X is 1-5, followed by a brief summary (max 30 words).
+
+Rating Scale:
+1 - No match: Missing key details, wrong category/brand, or suspicious activity
+2 - Potential match: Lacks essential info; needs clarification
+3 - Poor match: Some mismatches or missing details; acceptable but not ideal
+4 - Good match: Mostly meets criteria with clear, relevant details
+5 - Great deal: Fully matches criteria, with excellent condition or price"""
+
+# Few-shot examples for consistent rating behavior
+FEW_SHOT_EXAMPLES = [
+    {
+        "user_criteria": "Looking for: iPhone 12, budget: $300-500, good condition",
+        "listing": "iPhone 12 Pro 128GB, excellent condition, $450, includes charger and case",
+        "evaluation": "This listing closely matches your criteria. The iPhone 12 Pro is an upgrade from the standard iPhone 12, priced within your budget at $450. Excellent condition and includes accessories add value. Seller provides clear details and photos.\n\nRating 5: Perfect match - iPhone 12 Pro in excellent condition, great price with accessories",
+    },
+    {
+        "user_criteria": "Looking for: MacBook Air, budget: $800-1200, for college work",
+        "listing": "MacBook Pro 2019 16-inch, some wear on corners, $900, works fine",
+        "evaluation": "This is a MacBook Pro rather than the MacBook Air you requested. While the price fits your budget, the 16-inch Pro is heavier and more powerful than needed for typical college work. 'Some wear' and 'works fine' lack detail about actual condition.\n\nRating 2: Wrong model and vague condition description, needs more details",
+    },
+    {
+        "user_criteria": "Looking for: Gaming chair, budget: under $200, ergonomic features",
+        "listing": "IKEA office chair, used 6 months, $50, comfortable for long hours",
+        "evaluation": "This is a basic office chair rather than a gaming chair with ergonomic features. However, the low price of $50 is well within budget and the seller mentions comfort for extended use. The IKEA brand is reliable.\n\nRating 3: Not specifically a gaming chair but budget-friendly office alternative",
+    },
+]
+
 TAIConfig = TypeVar("TAIConfig", bound=AIConfig)
 
 
@@ -171,69 +211,117 @@ class AIBackend(Generic[TAIConfig]):
     def connect(self: "AIBackend") -> None:
         raise NotImplementedError("Connect method must be implemented by subclasses.")
 
+    def _sanitize_input(self, text: str) -> str:
+        """Basic input sanitization for backwards compatibility."""
+        if not text:
+            return text
+        # Simple HTML escape and basic pattern filtering
+        return html.escape(text, quote=True)
+
     def get_prompt(
         self: "AIBackend",
         listing: Listing,
         item_config: TItemConfig,
         marketplace_config: TMarketplaceConfig,
     ) -> str:
-        prompt = (
-            f"""A user wants to buy a {item_config.name} from Facebook Marketplace. """
-            f"""Search phrases: "{'" and "'.join(item_config.search_phrases)}", """
-        )
+        # Build user criteria section with sanitized inputs
+        user_criteria = f"Looking for: {item_config.name}"
+        if item_config.search_phrases:
+            # Sanitize search terms to prevent injection
+            sanitized_phrases = [
+                self._sanitize_input(phrase) for phrase in item_config.search_phrases
+            ]
+            search_terms = '" and "'.join(sanitized_phrases)
+            user_criteria += f", search terms: {search_terms}"
         if item_config.description:
-            prompt += f"""Description: "{item_config.description}", """
-        #
+            sanitized_desc = self._sanitize_input(item_config.description)
+            user_criteria += f", description: {sanitized_desc}"
+
+        # Add price constraints
         max_price = item_config.max_price or 0
         min_price = item_config.min_price or 0
         if max_price and min_price:
-            prompt += f"""Price range: {min_price} to {max_price}. """
+            user_criteria += f", budget: ${min_price}-{max_price}"
         elif max_price:
-            prompt += f"""Max price {max_price}. """
+            user_criteria += f", max budget: ${max_price}"
         elif min_price:
-            prompt += f"""Min price {min_price}. """
-        #
+            user_criteria += f", min budget: ${min_price}"
+
+        # Add exclusions with sanitized inputs
         if item_config.antikeywords:
-            prompt += f"""Exclude keywords "{'" and "'.join(item_config.antikeywords)}" in title or description."""
-        #
-        prompt += (
-            f"""\n\nThe user found a listing titled "{listing.title}" in {listing.condition} condition, """
-            f"""priced at {listing.price}, located in {listing.location}, """
-            f"""posted at {listing.post_url} with description "{listing.description}"\n\n"""
+            sanitized_antikeywords = [
+                self._sanitize_input(keyword) for keyword in item_config.antikeywords
+            ]
+            exclude_terms = '" and "'.join(sanitized_antikeywords)
+            user_criteria += f", exclude: {exclude_terms}"
+
+        # Build listing details section with sanitized inputs
+        sanitized_title = self._sanitize_input(listing.title)
+        sanitized_condition = self._sanitize_input(listing.condition)
+        sanitized_price = self._sanitize_input(listing.price)
+        sanitized_location = self._sanitize_input(listing.location)
+        sanitized_description = self._sanitize_input(listing.description)
+
+        listing_details = (
+            f"Title: {sanitized_title}\n"
+            f"Condition: {sanitized_condition}\n"
+            f"Price: {sanitized_price}\n"
+            f"Location: {sanitized_location}\n"
+            f"Description: {sanitized_description}\n"
+            f"URL: {listing.post_url}"
         )
-        # prompt
+
+        # Build evaluation instructions
+        evaluation_instructions = ""
         if item_config.prompt is not None:
-            prompt += item_config.prompt
+            evaluation_instructions = item_config.prompt
         elif marketplace_config.prompt is not None:
-            prompt += marketplace_config.prompt
+            evaluation_instructions = marketplace_config.prompt
         else:
-            prompt += (
-                "Evaluate how well this listing matches the user's criteria. Assess the description, MSRP, model year, "
-                "condition, and seller's credibility."
+            evaluation_instructions = (
+                "Evaluate how well this listing matches the user's criteria. "
+                "Assess the description, market value, condition, and seller credibility."
             )
-        # extra_prompt
-        prompt += "\n"
+
+        # Add extra instructions if provided
         if item_config.extra_prompt is not None:
-            prompt += f"\n{item_config.extra_prompt.strip()}\n"
+            evaluation_instructions += f"\n\n{item_config.extra_prompt.strip()}"
         elif marketplace_config.extra_prompt is not None:
-            prompt += f"\n{marketplace_config.extra_prompt.strip()}\n"
-        # rating_prompt
+            evaluation_instructions += f"\n\n{marketplace_config.extra_prompt.strip()}"
+
+        # Add rating instructions (for backward compatibility)
+        rating_instructions = ""
         if item_config.rating_prompt is not None:
-            prompt += f"\n{item_config.rating_prompt.strip()}\n"
+            rating_instructions = item_config.rating_prompt.strip()
         elif marketplace_config.rating_prompt is not None:
-            prompt += f"\n{marketplace_config.rating_prompt.strip()}\n"
+            rating_instructions = marketplace_config.rating_prompt.strip()
         else:
-            prompt += (
-                "\nRate from 1 to 5 based on the following: \n"
-                "1 - No match: Missing key details, wrong category/brand, or suspicious activity (e.g., external links).\n"
-                "2 - Potential match: Lacks essential info (e.g., condition, brand, or model); needs clarification.\n"
+            rating_instructions = (
+                "Rate from 1 to 5 based on the following:\n"
+                "1 - No match: Missing key details, wrong category/brand, or suspicious activity.\n"
+                "2 - Potential match: Lacks essential info; needs clarification.\n"
                 "3 - Poor match: Some mismatches or missing details; acceptable but not ideal.\n"
                 "4 - Good match: Mostly meets criteria with clear, relevant details.\n"
                 "5 - Great deal: Fully matches criteria, with excellent condition or price.\n"
-                "Conclude with:\n"
-                '"Rating <1-5>: <summary>"\n'
-                "where <1-5> is the rating and <summary> is a brief recommendation (max 30 words)."
+                'Conclude with: "Rating <1-5>: <summary>" where <1-5> is the rating and <summary> is a brief recommendation (max 30 words).'
             )
+
+        # Build the complete prompt using structured format
+        prompt = (
+            f"USER CRITERIA:\n{user_criteria}\n\n"
+            f"LISTING DETAILS:\n{listing_details}\n\n"
+            f"EVALUATION TASK:\n{evaluation_instructions}\n\n"
+            f"EXAMPLES OF GOOD EVALUATIONS:\n"
+            f"Example 1: {FEW_SHOT_EXAMPLES[0]['user_criteria']}\n"
+            f"Listing: {FEW_SHOT_EXAMPLES[0]['listing']}\n"
+            f"Evaluation: {FEW_SHOT_EXAMPLES[0]['evaluation']}\n\n"
+            f"Example 2: {FEW_SHOT_EXAMPLES[1]['user_criteria']}\n"
+            f"Listing: {FEW_SHOT_EXAMPLES[1]['listing']}\n"
+            f"Evaluation: {FEW_SHOT_EXAMPLES[1]['evaluation']}\n\n"
+            f"RATING INSTRUCTIONS:\n{rating_instructions}\n\n"
+            f"Now evaluate the listing above following the same format and rating scale."
+        )
+
         if self.logger:
             self.logger.debug(f"""{hilight("[AI-Prompt]", "info")} {prompt}""")
         return prompt
@@ -388,9 +476,11 @@ class OllamaBackend(OpenAIBackend):
 def _create_openai_model(config: AIConfig) -> BaseChatModel:
     """Create a ChatOpenAI model instance from AIConfig."""
     api_key = config.api_key or os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OpenAI API key is required")
 
     return ChatOpenAI(
-        api_key=api_key,
+        api_key=SecretStr(api_key),
         model=config.model or "gpt-4o",
         base_url=config.base_url,
         timeout=config.timeout,
@@ -405,10 +495,12 @@ def _create_openai_model(config: AIConfig) -> BaseChatModel:
 def _create_openrouter_model(config: AIConfig) -> BaseChatModel:
     """Create a ChatOpenAI model instance configured for OpenRouter."""
     api_key = config.api_key or os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        raise ValueError("OpenRouter API key is required")
     base_url = config.base_url or "https://openrouter.ai/api/v1"
 
     return ChatOpenAI(
-        api_key=api_key,
+        api_key=SecretStr(api_key),
         model=config.model or "gpt-4o",
         base_url=base_url,
         timeout=config.timeout,
@@ -423,9 +515,11 @@ def _create_openrouter_model(config: AIConfig) -> BaseChatModel:
 def _create_deepseek_model(config: AIConfig) -> BaseChatModel:
     """Create a ChatDeepSeek model instance from AIConfig."""
     api_key = config.api_key or os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise ValueError("DeepSeek API key is required")
 
     return ChatDeepSeek(
-        api_key=api_key,
+        api_key=SecretStr(api_key),
         model=config.model or "deepseek-chat",
         timeout=config.timeout,
         max_retries=config.max_retries,
@@ -461,11 +555,100 @@ class LangChainBackend(AIBackend[AIConfig]):
         super().__init__(config, logger)
         self._chat_model: BaseChatModel | None = None
         self._model_lock = threading.RLock()  # Reentrant lock for thread safety
+        self._prompt_template: ChatPromptTemplate | None = None
 
     @classmethod
     def get_config(cls: Type["LangChainBackend"], **kwargs: Any) -> AIConfig:
         """Get configuration for the LangChain backend."""
         return AIConfig(**kwargs)
+
+    def _create_prompt_template(self) -> ChatPromptTemplate:
+        """Create a structured ChatPromptTemplate for marketplace evaluation."""
+        if self._prompt_template is None:
+            self._prompt_template = ChatPromptTemplate.from_messages(
+                [("system", MARKETPLACE_EVALUATION_SYSTEM_MESSAGE), ("user", "{prompt}")]
+            )
+        return self._prompt_template
+
+    def _sanitize_input(self, text: str) -> str:
+        """Sanitize user input to prevent prompt injection attacks."""
+        if not text:
+            return text
+
+        # HTML escape to prevent script injection
+        sanitized = html.escape(text, quote=True)
+
+        # Remove or replace potentially dangerous patterns
+        dangerous_patterns = [
+            # System message injection attempts
+            (r"\[SYSTEM\]|\<system\>|\<\|system\|\>", "[USER INPUT]"),
+            # Role injection attempts
+            (r"\[ASSISTANT\]|\<assistant\>|\<\|assistant\|\>", "[USER INPUT]"),
+            (r"\[USER\]|\<user\>|\<\|user\|\>", "[USER INPUT]"),
+            # Instruction injection attempts
+            (r"ignore.{0,20}(previous|above|prior).{0,20}instruction", "[FILTERED]"),
+            (r"new.{0,20}instruction.{0,20}:", "[FILTERED]"),
+            (r"system.{0,20}prompt.{0,20}:", "[FILTERED]"),
+            # Excessive newlines that might break prompt structure
+            (r"\n{5,}", "\n\n"),
+        ]
+
+        for pattern, replacement in dangerous_patterns:
+            sanitized = re.sub(pattern, replacement, sanitized, flags=re.IGNORECASE)
+
+        return sanitized
+
+    def _estimate_tokens(self, text: str) -> int:
+        """Estimate token count using a more accurate heuristic."""
+        if not text:
+            return 0
+
+        # More sophisticated token estimation
+        # Count words, considering punctuation and special tokens
+        words = text.split()
+        word_tokens = len(words)
+
+        # Add tokens for punctuation and special characters
+        punctuation_tokens = len([c for c in text if c in ".,!?;:()[]{}\"'-/\\"])
+
+        # Add tokens for numbers (numbers often tokenize as single tokens)
+        number_tokens = len(re.findall(r"\d+", text))
+
+        # Estimate subword tokens (many words split into multiple tokens)
+        estimated_subword_tokens = sum(max(1, len(word) // 4) for word in words)
+
+        # Use the higher estimate between word count and subword estimation
+        estimated_tokens = (
+            max(word_tokens, estimated_subword_tokens) + punctuation_tokens + number_tokens
+        )
+
+        return estimated_tokens
+
+    def _validate_prompt(self, prompt: str) -> None:
+        """Validate prompt length and content."""
+        if not prompt or not prompt.strip():
+            raise ValueError("Prompt cannot be empty")
+
+        estimated_tokens = self._estimate_tokens(prompt)
+        if estimated_tokens > 8000:  # Conservative limit for most models
+            if self.logger:
+                self.logger.warning(
+                    f"Prompt is very long ({estimated_tokens} estimated tokens). "
+                    "Consider shortening for better performance."
+                )
+
+    def get_structured_prompt(
+        self,
+        listing: Listing,
+        item_config: TItemConfig,
+        marketplace_config: TMarketplaceConfig,
+    ) -> ChatPromptTemplate:
+        """Create a structured ChatPromptTemplate with the evaluation data."""
+        prompt_content = self.get_prompt(listing, item_config, marketplace_config)
+        self._validate_prompt(prompt_content)
+
+        template = self._create_prompt_template()
+        return template
 
     def _get_model(self, config: AIConfig) -> BaseChatModel:
         """Retrieve the appropriate LangChain chat model instance based on provider mapping."""
@@ -480,15 +663,10 @@ class LangChainBackend(AIBackend[AIConfig]):
                 f"Supported providers: {supported_providers}"
             )
 
-        provider_factory = provider_map[provider_key]
         try:
+            provider_factory = provider_map[provider_key]
             return provider_factory(config)
-        except KeyError as e:
-            raise ValueError(
-                f"Provider '{config.provider}' configuration is missing required field: {e}"
-            ) from e
-        except TypeError as e:
-            # Handle invalid parameter types or missing required parameters
+        except (ValueError, TypeError, KeyError) as e:
             raise ValueError(
                 f"Provider '{config.provider}' configuration error: {e}. "
                 f"Check API key, model name, and other required settings."
@@ -498,15 +676,10 @@ class LangChainBackend(AIBackend[AIConfig]):
                 f"Provider '{config.provider}' dependencies not installed: {e}. "
                 f"Install the required LangChain packages."
             ) from e
-        except ValueError as e:
-            # Re-raise ValueError with more context
-            raise ValueError(f"Provider '{config.provider}' configuration error: {e}") from e
         except Exception as e:
-            # Preserve original exception details for debugging
-            error_msg = f"Failed to create model for provider '{config.provider}': {e}"
-            if hasattr(e, "__cause__") and e.__cause__:
-                error_msg += f" (caused by: {e.__cause__})"
-            raise RuntimeError(error_msg) from e
+            raise RuntimeError(
+                f"Failed to create model for provider '{config.provider}': {e}"
+            ) from e
 
     def connect(self) -> None:
         """Establish connection and initialize the chat model."""
@@ -581,16 +754,12 @@ class LangChainBackend(AIBackend[AIConfig]):
                     current_model = self._chat_model
                     assert current_model is not None
 
-                # Use LangChain's invoke method (outside the lock to avoid blocking other threads)
-                response = current_model.invoke(
-                    [
-                        (
-                            "system",
-                            "You are a helpful assistant that can confirm if a user's search criteria matches the item he is interested in.",
-                        ),
-                        ("user", prompt),
-                    ]
-                )
+                # Create structured prompt template and format it
+                prompt_template = self._create_prompt_template()
+                formatted_messages = prompt_template.format_messages(prompt=prompt)
+
+                # Use LangChain's invoke method with formatted messages
+                response = current_model.invoke(formatted_messages)
                 break
             except KeyboardInterrupt:
                 raise

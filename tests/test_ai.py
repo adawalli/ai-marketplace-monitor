@@ -492,7 +492,7 @@ But condition could be better"""
             mock_provider_map.__getitem__.return_value = mock_factory
             mock_provider_map.__contains__.return_value = True
 
-            with pytest.raises(ValueError, match="missing required field: 'api_key'"):
+            with pytest.raises(ValueError, match="configuration error.*Check API key"):
                 backend._get_model(config)
 
     def test_get_model_typeerror_handling(self) -> None:
@@ -524,7 +524,7 @@ But condition could be better"""
                 backend._get_model(config)
 
     def test_get_model_chained_exception_handling(self) -> None:
-        """Test enhanced error handling preserves exception chain."""
+        """Test enhanced error handling for RuntimeError exceptions."""
         config = AIConfig(name="test-backend", provider="openai", api_key="test-key")
         backend = LangChainBackend(config)
 
@@ -540,5 +540,5 @@ But condition could be better"""
                 mock_provider_map.__getitem__.return_value = mock_factory
                 mock_provider_map.__contains__.return_value = True
 
-                with pytest.raises(RuntimeError, match="caused by.*original error"):
+                with pytest.raises(RuntimeError, match="Failed to create model.*chained error"):
                     backend._get_model(config)

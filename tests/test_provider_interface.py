@@ -72,13 +72,13 @@ def test_complete_provider_instantiation() -> None:
 def test_incomplete_provider_raises_typeerror() -> None:
     """Test that incomplete provider implementation raises TypeError on instantiation."""
     with pytest.raises(TypeError, match="Can't instantiate abstract class"):
-        IncompleteProviderMock()
+        IncompleteProviderMock()  # type: ignore
 
 
 def test_partial_provider_raises_typeerror() -> None:
     """Test that partially implemented provider raises TypeError on instantiation."""
     with pytest.raises(TypeError, match="Can't instantiate abstract class"):
-        PartialProviderMock()
+        PartialProviderMock()  # type: ignore
 
 
 def test_complete_provider_method_calls() -> None:
@@ -111,4 +111,4 @@ def test_complete_provider_method_calls() -> None:
 def test_provider_interface_is_abstract() -> None:
     """Test that ProviderInterface itself cannot be instantiated."""
     with pytest.raises(TypeError, match="Can't instantiate abstract class"):
-        ProviderInterface()
+        ProviderInterface()  # type: ignore

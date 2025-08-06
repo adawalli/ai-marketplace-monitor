@@ -51,7 +51,7 @@ class TestOpenAIProviderMapping:
         model = _create_openai_model(config)
 
         assert isinstance(model, ChatOpenAI)
-        assert model.openai_api_key.get_secret_value() == "test-key"
+        assert model.openai_api_key.get_secret_value() == "test-key"  # type: ignore
         assert model.model_name == "gpt-4"
         assert model.openai_api_base == "https://custom.openai.com"
         assert model.request_timeout == 60
@@ -64,7 +64,7 @@ class TestOpenAIProviderMapping:
         model = _create_openai_model(config)
 
         assert isinstance(model, ChatOpenAI)
-        assert model.openai_api_key.get_secret_value() == "test-key"
+        assert model.openai_api_key.get_secret_value() == "test-key"  # type: ignore
         assert model.model_name == "gpt-4o"  # Default model
 
     @patch.dict(os.environ, {"OPENAI_API_KEY": "env-key"})
@@ -75,7 +75,7 @@ class TestOpenAIProviderMapping:
         model = _create_openai_model(config)
 
         assert isinstance(model, ChatOpenAI)
-        assert model.openai_api_key.get_secret_value() == "env-key"
+        assert model.openai_api_key.get_secret_value() == "env-key"  # type: ignore
 
     def test_provider_map_openai_integration(self) -> None:
         """Test that provider_map['openai'] works correctly."""
@@ -104,7 +104,7 @@ class TestOpenRouterProviderMapping:
         model = _create_openrouter_model(config)
 
         assert isinstance(model, ChatOpenAI)
-        assert model.openai_api_key.get_secret_value() == "test-key"
+        assert model.openai_api_key.get_secret_value() == "test-key"  # type: ignore
         assert model.model_name == "gpt-4"
         assert model.openai_api_base == "https://custom.openrouter.ai/api/v1"
         assert model.request_timeout == 60
@@ -117,7 +117,7 @@ class TestOpenRouterProviderMapping:
         model = _create_openrouter_model(config)
 
         assert isinstance(model, ChatOpenAI)
-        assert model.openai_api_key.get_secret_value() == "test-key"
+        assert model.openai_api_key.get_secret_value() == "test-key"  # type: ignore
         assert model.model_name == "gpt-4o"  # Default model
         assert model.openai_api_base == "https://openrouter.ai/api/v1"  # Default base URL
 
@@ -129,7 +129,7 @@ class TestOpenRouterProviderMapping:
         model = _create_openrouter_model(config)
 
         assert isinstance(model, ChatOpenAI)
-        assert model.openai_api_key.get_secret_value() == "env-key"
+        assert model.openai_api_key.get_secret_value() == "env-key"  # type: ignore
 
     def test_provider_map_openrouter_integration(self) -> None:
         """Test that provider_map['openrouter'] works correctly."""
@@ -157,7 +157,7 @@ class TestDeepSeekProviderMapping:
         model = _create_deepseek_model(config)
 
         assert isinstance(model, ChatDeepSeek)
-        assert model.api_key.get_secret_value() == "test-key"
+        assert model.api_key.get_secret_value() == "test-key"  # type: ignore
         assert model.model_name == "deepseek-chat"
         assert model.request_timeout == 60
         assert model.max_retries == 5
@@ -169,7 +169,7 @@ class TestDeepSeekProviderMapping:
         model = _create_deepseek_model(config)
 
         assert isinstance(model, ChatDeepSeek)
-        assert model.api_key.get_secret_value() == "test-key"
+        assert model.api_key.get_secret_value() == "test-key"  # type: ignore
         assert model.model_name == "deepseek-chat"  # Default model
 
     @patch.dict(os.environ, {"DEEPSEEK_API_KEY": "env-key"})
@@ -180,7 +180,7 @@ class TestDeepSeekProviderMapping:
         model = _create_deepseek_model(config)
 
         assert isinstance(model, ChatDeepSeek)
-        assert model.api_key.get_secret_value() == "env-key"
+        assert model.api_key.get_secret_value() == "env-key"  # type: ignore
 
     def test_provider_map_deepseek_integration(self) -> None:
         """Test that provider_map['deepseek'] works correctly."""
