@@ -1025,7 +1025,7 @@ class LangChainBackend(AIBackend[AIConfig]):
             if self.logger:
                 self.logger.debug(
                     f"""{hilight("[Exception-Mapping]", "succ")} Mapped {hilight(exception_type)} """
-                    f"""to {hilight(mapped_type)} via {mapping_type} in {elapsed_time*1000:.2f}ms"""
+                    f"""to {hilight(mapped_type)} via {mapping_type} in {elapsed_time * 1000:.2f}ms"""
                 )
             return mapped_exc
 
