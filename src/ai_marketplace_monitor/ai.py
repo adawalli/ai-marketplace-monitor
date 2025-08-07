@@ -1072,6 +1072,10 @@ class LangChainBackend(AIBackend[AIConfig]):
         # ==================== STAGE 2: PROVIDER-SPECIFIC EXCEPTION MAPPING ====================
         # Map exceptions from underlying AI providers (OpenAI, Anthropic, etc.) that are wrapped by LangChain.
         # These are API-level errors from the actual model providers.
+        #
+        # Mapping Strategy:
+        # - Configuration/Auth errors → ValueError (user can fix)
+        # - Service/Infrastructure errors → RuntimeError (service issue)
 
         exception_name = type(e).__name__
 
@@ -1084,7 +1088,7 @@ class LangChainBackend(AIBackend[AIConfig]):
             return _return_mapped_exception(mapped_exc, "provider-connection")
 
         if exception_name == "AuthenticationError":
-            mapped_exc = RuntimeError(
+            mapped_exc = ValueError(
                 f"{context_prefix}Authentication error: {error_msg}. Check API key configuration."
             )
             return _return_mapped_exception(mapped_exc, "provider-auth")
@@ -1097,14 +1101,14 @@ class LangChainBackend(AIBackend[AIConfig]):
             return _return_mapped_exception(mapped_exc, "provider-rate-limit")
 
         if exception_name == "BadRequestError":
-            mapped_exc = RuntimeError(
+            mapped_exc = ValueError(
                 f"{context_prefix}Invalid request: {error_msg}. "
                 "Check model parameters and input format."
             )
             return _return_mapped_exception(mapped_exc, "provider-bad-request")
 
         if exception_name in ["NotFoundError", "PermissionDeniedError"]:
-            mapped_exc = RuntimeError(
+            mapped_exc = ValueError(
                 f"{context_prefix}Resource access error: {error_msg}. "
                 "Check model availability and permissions."
             )
@@ -1132,7 +1136,7 @@ class LangChainBackend(AIBackend[AIConfig]):
             pattern in error_msg.lower()
             for pattern in ["api_key", "authentication", "unauthorized"]
         ):
-            mapped_exc = RuntimeError(
+            mapped_exc = ValueError(
                 f"{context_prefix}Authentication error: {error_msg}. Check API key configuration."
             )
             return _return_mapped_exception(mapped_exc, "generic-auth-error")
