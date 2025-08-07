@@ -1,0 +1,42 @@
+# Task ID: 3
+# Title: Implement Provider Mapping System
+# Status: done
+# Dependencies: 2
+# Priority: high
+# Description: Develop core logic to map AIConfig provider values to corresponding LangChain chat model constructors with appropriate parameters.
+# Details:
+Create a provider_map dictionary mapping 'openai', 'deepseek', 'ollama', and 'openrouter' to lambda functions returning configured LangChain chat models. For OpenRouter, use ChatOpenAI with custom base_url and headers. DeepSeek uses langchain-deepseek package and environment variable for API key. Ensure mapping respects existing TOML config fields and environment variables.
+
+# Test Strategy:
+Unit test each provider mapping by passing sample AIConfig objects and verifying returned model instances and parameters match expectations.
+
+# Subtasks:
+## 1. Create provider_map dictionary structure [done]
+### Dependencies: None
+### Description: Define the provider_map dictionary with keys for each provider ('openai', 'deepseek', 'ollama', 'openrouter') and placeholder lambda functions for model constructors.
+### Details:
+Initialize provider_map as a Python dictionary. Each key corresponds to a provider string and maps to a lambda function that accepts an AIConfig object and returns a configured LangChain chat model instance.
+
+## 2. Implement OpenAI and OpenRouter provider mapping logic [done]
+### Dependencies: None
+### Description: Implement the lambda functions for 'openai' and 'openrouter' keys in provider_map, configuring LangChain ChatOpenAI models with appropriate parameters, including custom base_url and headers for OpenRouter.
+### Details:
+For 'openai', map AIConfig parameters to ChatOpenAI constructor arguments. For 'openrouter', use ChatOpenAI with custom base_url and headers derived from AIConfig and environment variables as needed.
+
+## 3. Implement DeepSeek and Ollama provider mapping logic [done]
+### Dependencies: None
+### Description: Implement the lambda functions for 'deepseek' and 'ollama' keys in provider_map, using the langchain-deepseek package for DeepSeek with API key from environment variables, and appropriate LangChain model constructors for Ollama.
+### Details:
+For DeepSeek, retrieve DEEPSEEK_API_KEY from environment variables and pass it to the DeepSeek model constructor. For Ollama, map AIConfig parameters to the Ollama LangChain chat model constructor.
+
+## 4. Handle environment variables and config integration [done]
+### Dependencies: None
+### Description: Implement logic to correctly read and apply environment variables (e.g., DEEPSEEK_API_KEY) and integrate existing TOML config fields into provider mapping functions.
+### Details:
+Ensure environment variables are accessed securely and override or supplement AIConfig parameters as needed. Validate that all required config fields are respected and correctly passed to model constructors.
+
+## 5. Unit test each provider mapping function [done]
+### Dependencies: None
+### Description: Write and execute unit tests for each provider mapping lambda function in provider_map, verifying that given sample AIConfig inputs, the returned LangChain chat model instances have expected types and parameters.
+### Details:
+Create mock AIConfig objects with representative parameters for each provider. Assert that the returned model instances match expected classes and configurations. Include tests for environment variable handling and error cases.

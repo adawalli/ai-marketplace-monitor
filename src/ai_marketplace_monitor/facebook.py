@@ -298,12 +298,12 @@ class FacebookMarketplace(Marketplace):
                     )
             elif self.logger:
                 self.logger.debug(
-                    f'{hilight("[Login]", "succ")} Cookie consent pop-up not found or not visible within timeout.'
+                    f"{hilight('[Login]', 'succ')} Cookie consent pop-up not found or not visible within timeout."
                 )
         except Exception as e:
             if self.logger:
                 self.logger.warning(
-                    f'{hilight("[Login]", "fail")} Could not handle cookie pop-up (or it was not present): {e!s}'
+                    f"{hilight('[Login]', 'fail')} Could not handle cookie pop-up (or it was not present): {e!s}"
                 )
 
         self.config: FacebookMarketplaceConfig
@@ -577,7 +577,7 @@ class FacebookMarketplace(Marketplace):
         ):
             if self.logger:
                 self.logger.info(
-                    f"""{hilight("[Skip]", "fail")} Exclude {hilight(item.title)} due to {hilight("excluded keywords", "fail")}: {', '.join(antikeywords)}"""
+                    f"""{hilight("[Skip]", "fail")} Exclude {hilight(item.title)} due to {hilight("excluded keywords", "fail")}: {", ".join(antikeywords)}"""
                 )
             return False
 
@@ -626,7 +626,6 @@ class FacebookMarketplace(Marketplace):
 
 
 class FacebookSearchResultPage(WebPage):
-
     def _get_listings_elements_by_children_counts(self: "FacebookSearchResultPage"):
         parent: ElementHandle | None = self.page.locator("img").first.element_handle()
         # look for parent of parent until it has more than 10 children
@@ -647,7 +646,7 @@ class FacebookSearchResultPage(WebPage):
             # this error should be tolerated
             if self.logger:
                 self.logger.debug(
-                    f'{hilight("[Retrieve]", "fail")} Some grid item cannot be read: {e}'
+                    f"{hilight('[Retrieve]', 'fail')} Some grid item cannot be read: {e}"
                 )
         return valid_listings
 
@@ -672,7 +671,7 @@ class FacebookSearchResultPage(WebPage):
             # this error should be tolerated
             if self.logger:
                 self.logger.debug(
-                    f'{hilight("[Retrieve]", "fail")} Some grid item cannot be read: {e}'
+                    f"{hilight('[Retrieve]', 'fail')} Some grid item cannot be read: {e}"
                 )
         return valid_listings
 
@@ -687,7 +686,7 @@ class FacebookSearchResultPage(WebPage):
                     and self.translator("Browse Marketplace") in (x[-1].text_content() or ""),
                     1,
                 )
-                self.logger.info(f'{hilight("[Retrieve]", "dim")} {msg}')
+                self.logger.info(f"{hilight('[Retrieve]', 'dim')} {msg}")
             return []
 
         # find the grid box
@@ -702,7 +701,7 @@ class FacebookSearchResultPage(WebPage):
             filename = datetime.datetime.now().strftime("debug_%Y%m%d_%H%M%S.html")
             if self.logger:
                 self.logger.error(
-                    f'{hilight("[Retrieve]", "fail")} failed to parse searching result. Page saved to {filename}: {e}'
+                    f"{hilight('[Retrieve]', 'fail')} failed to parse searching result. Page saved to {filename}: {e}"
                 )
             with open(filename, "w", encoding="utf-8") as f:
                 f.write(self.page.content())
@@ -761,14 +760,13 @@ class FacebookSearchResultPage(WebPage):
             except Exception as e:
                 if self.logger:
                     self.logger.error(
-                        f'{hilight("[Retrieve]", "fail")} Failed to parse search results {idx + 1} listing: {e}'
+                        f"{hilight('[Retrieve]', 'fail')} Failed to parse search results {idx + 1} listing: {e}"
                     )
                 continue
         return listings
 
 
 class FacebookItemPage(WebPage):
-
     def verify_layout(self: "FacebookItemPage") -> bool:
         return True
 
@@ -806,7 +804,7 @@ class FacebookItemPage(WebPage):
             raise ValueError(f"Failed to parse {post_url}")
 
         if self.logger:
-            self.logger.info(f'{hilight("[Retrieve]", "succ")} Parsing {hilight(title)}')
+            self.logger.info(f"{hilight('[Retrieve]', 'succ')} Parsing {hilight(title)}")
         res = Listing(
             marketplace="facebook",
             name="",
@@ -821,7 +819,7 @@ class FacebookItemPage(WebPage):
             seller=self.get_seller(),
         )
         if self.logger:
-            self.logger.debug(f'{hilight("[Retrieve]", "succ")} {pretty_repr(res)}')
+            self.logger.debug(f"{hilight('[Retrieve]', 'succ')} {pretty_repr(res)}")
         return cast(Listing, res)
 
 
@@ -840,7 +838,7 @@ class FacebookRegularItemPage(FacebookItemPage):
             raise
         except Exception as e:
             if self.logger:
-                self.logger.debug(f'{hilight("[Retrieve]", "fail")} {e}')
+                self.logger.debug(f"{hilight('[Retrieve]', 'fail')} {e}")
             return ""
 
     def get_price(self: "FacebookRegularItemPage") -> str:
@@ -851,7 +849,7 @@ class FacebookRegularItemPage(FacebookItemPage):
             raise
         except Exception as e:
             if self.logger:
-                self.logger.debug(f'{hilight("[Retrieve]", "fail")} {e}')
+                self.logger.debug(f"{hilight('[Retrieve]', 'fail')} {e}")
             return ""
 
     def get_image_url(self: "FacebookRegularItemPage") -> str:
@@ -862,7 +860,7 @@ class FacebookRegularItemPage(FacebookItemPage):
             raise
         except Exception as e:
             if self.logger:
-                self.logger.debug(f'{hilight("[Retrieve]", "fail")} {e}')
+                self.logger.debug(f"{hilight('[Retrieve]', 'fail')} {e}")
             return ""
 
     def get_seller(self: "FacebookRegularItemPage") -> str:
@@ -873,7 +871,7 @@ class FacebookRegularItemPage(FacebookItemPage):
             raise
         except Exception as e:
             if self.logger:
-                self.logger.debug(f'{hilight("[Retrieve]", "fail")} {e}')
+                self.logger.debug(f"{hilight('[Retrieve]', 'fail')} {e}")
             return ""
 
     def get_description(self: "FacebookRegularItemPage") -> str:
@@ -887,7 +885,7 @@ class FacebookRegularItemPage(FacebookItemPage):
             raise
         except Exception as e:
             if self.logger:
-                self.logger.debug(f'{hilight("[Retrieve]", "fail")} {e}')
+                self.logger.debug(f"{hilight('[Retrieve]', 'fail')} {e}")
             return ""
 
     def get_condition(self: "FacebookRegularItemPage") -> str:
@@ -904,7 +902,7 @@ class FacebookRegularItemPage(FacebookItemPage):
             raise
         except Exception as e:
             if self.logger:
-                self.logger.debug(f'{hilight("[Retrieve]", "fail")} {e}')
+                self.logger.debug(f"{hilight('[Retrieve]', 'fail')} {e}")
             return ""
 
     def get_location(self: "FacebookRegularItemPage") -> str:
@@ -923,7 +921,7 @@ class FacebookRegularItemPage(FacebookItemPage):
             raise
         except Exception as e:
             if self.logger:
-                self.logger.debug(f'{hilight("[Retrieve]", "fail")} {e}')
+                self.logger.debug(f"{hilight('[Retrieve]', 'fail')} {e}")
             return ""
 
 
@@ -951,7 +949,7 @@ class FacebookRentalItemPage(FacebookRegularItemPage):
             raise
         except Exception as e:
             if self.logger:
-                self.logger.debug(f'{hilight("[Retrieve]", "fail")} {e}')
+                self.logger.debug(f"{hilight('[Retrieve]', 'fail')} {e}")
             return ""
 
     def get_condition(self: "FacebookRentalItemPage") -> str:
@@ -990,7 +988,7 @@ class FacebookAutoItemWithAboutAndDescriptionPage(FacebookRegularItemPage):
             raise
         except Exception as e:
             if self.logger:
-                self.logger.debug(f'{hilight("[Retrieve]", "fail")} {e}')
+                self.logger.debug(f"{hilight('[Retrieve]', 'fail')} {e}")
             return ""
 
     def _get_seller_description(self: "FacebookAutoItemWithAboutAndDescriptionPage") -> str:
@@ -1018,7 +1016,7 @@ class FacebookAutoItemWithAboutAndDescriptionPage(FacebookRegularItemPage):
             raise
         except Exception as e:
             if self.logger:
-                self.logger.debug(f'{hilight("[Retrieve]", "fail")} {e}')
+                self.logger.debug(f"{hilight('[Retrieve]', 'fail')} {e}")
             return ""
 
     def verify_layout(self: "FacebookAutoItemWithAboutAndDescriptionPage") -> bool:
@@ -1069,7 +1067,7 @@ class FacebookAutoItemWithDescriptionPage(FacebookAutoItemWithAboutAndDescriptio
             raise
         except Exception as e:
             if self.logger:
-                self.logger.debug(f'{hilight("[Retrieve]", "fail")} {e}')
+                self.logger.debug(f"{hilight('[Retrieve]', 'fail')} {e}")
             return ""
 
     def get_condition(self: "FacebookAutoItemWithDescriptionPage") -> str:
@@ -1100,7 +1098,7 @@ class FacebookAutoItemWithDescriptionPage(FacebookAutoItemWithAboutAndDescriptio
             raise
         except Exception as e:
             if self.logger:
-                self.logger.debug(f'{hilight("[Retrieve]", "fail")} {e}')
+                self.logger.debug(f"{hilight('[Retrieve]', 'fail')} {e}")
             return ""
 
     def get_price(self: "FacebookAutoItemWithDescriptionPage") -> str:
@@ -1120,7 +1118,7 @@ class FacebookAutoItemWithDescriptionPage(FacebookAutoItemWithAboutAndDescriptio
             raise
         except Exception as e:
             if self.logger:
-                self.logger.debug(f'{hilight("[Retrieve]", "fail")} {e}')
+                self.logger.debug(f"{hilight('[Retrieve]', 'fail')} {e}")
             return ""
 
 

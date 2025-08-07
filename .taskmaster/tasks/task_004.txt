@@ -1,0 +1,78 @@
+# Task ID: 4
+# Title: Develop LangChainBackend Base Class
+# Status: done
+# Dependencies: 3
+# Priority: high
+# Description: Create the unified LangChainBackend class replacing existing backend classes, implementing connection handling and model retrieval using provider mapping.
+# Details:
+Implement LangChainBackend inheriting from AIBackend. Implement _get_model(config) method to use provider_map from Task 3. Handle connection setup, retries, and consistent error handling. Ensure backward compatibility by preserving API surface and config validation. Use Python 3.10+ features and type hints.
+
+# Test Strategy:
+Write unit tests to instantiate LangChainBackend with various AIConfig inputs and verify correct model retrieval and error handling behavior.
+
+# Subtasks:
+## 1. Create LangChainBackend Class Skeleton [done]
+### Dependencies: None
+### Description: Define the LangChainBackend class inheriting from AIBackend with initial structure, including constructor and placeholder methods.
+### Details:
+Set up class with Python 3.10+ features and type hints. Include basic attributes and prepare for integration of provider_map and connection logic.
+
+## 2. Implement _get_model Method Using provider_map [done]
+### Dependencies: None
+### Description: Develop the _get_model(config) method to retrieve the appropriate LangChain chat model instance based on the provider_map from Task 3.
+### Details:
+Use the provider_map dictionary to map AIConfig provider values to model constructors. Ensure parameters are passed correctly and handle unknown providers gracefully.
+
+## 3. Implement Connection and Retry Logic [done]
+### Dependencies: None
+### Description: Add connection setup and retry mechanisms within LangChainBackend to ensure robust model instantiation and API communication.
+### Details:
+Incorporate retry policies for transient failures, manage connection state, and ensure thread safety if applicable. Use appropriate exception handling for connection errors.
+
+## 4. Integrate Consistent Error Handling [done]
+### Dependencies: None
+### Description: Implement uniform error handling across LangChainBackend methods to capture, log, and propagate errors consistently.
+### Details:
+Define custom exceptions or use existing ones to wrap LangChain and provider errors. Ensure error messages are informative and compatible with existing API expectations.
+
+## 5. Preserve Backward Compatibility [done]
+### Dependencies: None
+### Description: Ensure LangChainBackend maintains the existing API surface, configuration validation, and behavior to support legacy clients and configurations.
+### Details:
+Validate inputs against existing schemas, support legacy config fields, and maintain output formats. Coordinate with Task 10 for compatibility testing.
+
+## 6. Develop Comprehensive Unit Tests [done]
+### Dependencies: None
+### Description: Write unit tests covering LangChainBackend instantiation, _get_model functionality, connection and retry logic, error handling, and backward compatibility.
+### Details:
+Use various AIConfig inputs to verify correct model retrieval and error scenarios. Mock external dependencies as needed. Ensure tests cover edge cases and integration points.
+
+## 7. Fix Critical Response Content Extraction [done]
+### Dependencies: None
+### Description: Improve response content extraction with proper type checking and fallback handling for different LangChain response formats
+### Details:
+Replace fragile hasattr() check with proper type checking for LangChain response objects. Handle response.content, response.text, and other formats. Add logging for unknown response types and ensure consistent behavior across all providers.
+
+## 8. Improve Retry Logic Error Handling [done]
+### Dependencies: None
+### Description: Fix incomplete error handling in retry logic where connect() calls could fail without proper exception handling
+### Details:
+Wrap connect() calls within retry loop in proper try/catch blocks. Handle connection failures gracefully and continue retry attempts. Ensure failed connections don't crash the entire evaluation process.
+
+## 9. Address Thread Safety Concerns [done]
+### Dependencies: None
+### Description: Evaluate and address thread safety issues with shared _chat_model instance variable in multi-threaded scenarios
+### Details:
+Analyze thread safety implications of _chat_model being reset by one thread affecting others. Consider thread-local storage, connection pooling, or instance-per-thread patterns. Document thread safety guarantees and add appropriate safeguards.
+
+## 10. Extract Common Response Parsing Logic [done]
+### Dependencies: None
+### Description: Eliminate code duplication by extracting shared response parsing logic into reusable methods
+### Details:
+The response parsing logic (rating extraction, comment processing) is duplicated from OpenAIBackend. Extract this into a shared base method or utility function to reduce maintenance burden and ensure consistency across backends.
+
+## 11. Enhance Provider Factory Exception Handling [done]
+### Dependencies: None
+### Description: Improve provider factory error handling to preserve debugging information and provide more specific error messages
+### Details:
+Replace generic Exception catching with more specific exception types. Preserve original exception details for debugging. Provide provider-specific error messages for common failures (API key issues, network problems, invalid configurations).

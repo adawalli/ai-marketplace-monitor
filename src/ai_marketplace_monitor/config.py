@@ -11,7 +11,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-from .ai import DeepSeekBackend, OllamaBackend, OpenAIBackend, TAIConfig
+from .ai import LangChainBackend, TAIConfig
 from .facebook import FacebookMarketplace
 from .marketplace import TItemConfig, TMarketplaceConfig
 from .notification import NotificationConfig
@@ -20,10 +20,13 @@ from .user import User, UserConfig
 from .utils import MonitorConfig, Translator, hilight, merge_dicts
 
 supported_marketplaces = {"facebook": FacebookMarketplace}
+# Configuration compatibility layer: All AI providers now route through
+# LangChainBackend while preserving existing TOML configuration format
 supported_ai_backends = {
-    "deepseek": DeepSeekBackend,
-    "openai": OpenAIBackend,
-    "ollama": OllamaBackend,
+    "deepseek": LangChainBackend,  # Mapped to _create_deepseek_model
+    "openai": LangChainBackend,  # Mapped to _create_openai_model
+    "ollama": LangChainBackend,  # Mapped to _create_ollama_model
+    "openrouter": LangChainBackend,  # Mapped to _create_openrouter_model
 }
 
 
@@ -106,14 +109,18 @@ class Config(Generic[TAIConfig, TItemConfig, TMarketplaceConfig]):
         self.ai = {}
         for key, value in config.get("ai", {}).items():
             try:
-                backend_class = supported_ai_backends[value.get("provider", key).lower()]
+                provider = value.get("provider", key).lower()
+                backend_class = supported_ai_backends[provider]
             except KeyboardInterrupt:
                 raise
             except Exception as e:
                 raise ValueError(
                     f"Config file contains an unsupported AI backend {key} in the ai section."
                 ) from e
-            self.ai[key] = backend_class.get_config(name=key, **value)
+            # Ensure provider is set in the config values
+            config_values = value.copy()
+            config_values["provider"] = provider
+            self.ai[key] = backend_class.get_config(name=key, **config_values)
 
     def get_notification_config(self: "Config", config: Dict[str, Any]) -> None:
         if not isinstance(config.get("notification", {}), dict):
