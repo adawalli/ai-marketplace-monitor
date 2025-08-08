@@ -18,14 +18,14 @@ Getting Started
    usage
    features
 
-Configuration & Setup
-====================
+Reference & Setup
+=================
 
 .. toctree::
    :maxdepth: 2
 
-   configuration
-   advanced-features
+   configuration-guide
+   Configuration Reference <configuration>
    troubleshooting
 
 Development & Reference
@@ -34,7 +34,6 @@ Development & Reference
 .. toctree::
    :maxdepth: 2
 
-   modules
    changelog
    contributing
 
