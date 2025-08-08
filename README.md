@@ -150,7 +150,7 @@ For detailed information on setup and advanced features, see the comprehensive d
 - **[🚀 Quick Start Guide](https://ai-marketplace-monitor.readthedocs.io/en/latest/quickstart.html)** - Get up and running in 10 minutes
 - **[🔍 Features Overview](https://ai-marketplace-monitor.readthedocs.io/en/latest/features.html)** - Complete feature list
 - **[📱 Usage Guide](https://ai-marketplace-monitor.readthedocs.io/en/latest/usage.html)** - Command-line options and tips
-- **[🔧 Configuration Guide](https://ai-marketplace-monitor.readthedocs.io/en/latest/configurateion-guide.html)** - Notifications, AI prompts, multi-location search
+- **[🔧 Configuration Guide](https://ai-marketplace-monitor.readthedocs.io/en/latest/configuration-guide.html)** - Notifications, AI prompts, multi-location search
 - **[⚙️ Configuration Reference](https://ai-marketplace-monitor.readthedocs.io/en/latest/configuration.html)** - Complete configuration reference
 
 ### Key Topics Covered in Documentation
