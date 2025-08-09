@@ -587,20 +587,16 @@ class FacebookMarketplace(Marketplace):
     ) -> bool:
         # get antikeywords from both item_config or config
         antikeywords = item_config.antikeywords
-        if description_available and antikeywords:
-            # Check antikeywords in both title and description when available
-            if is_substring(antikeywords, item.title + " " + item.description, logger=self.logger):
+        if antikeywords:
+            # Determine what text to search based on availability
+            search_text = item.title + (" " + item.description if description_available else "")
+
+            # Check antikeywords against available text (eagerly reject)
+            if is_substring(antikeywords, search_text, logger=self.logger):
                 if self.logger:
+                    location_detail = "" if description_available else " in title"
                     self.logger.info(
-                        f"""{hilight("[Skip]", "fail")} Exclude {hilight(item.title)} due to {hilight("excluded keywords", "fail")}: {", ".join(antikeywords)}"""
-                    )
-                return False
-        elif antikeywords:
-            # Check antikeywords in title only when description not available
-            if is_substring(antikeywords, item.title, logger=self.logger):
-                if self.logger:
-                    self.logger.info(
-                        f"""{hilight("[Skip]", "fail")} Exclude {hilight(item.title)} due to {hilight("excluded keywords", "fail")} in title: {", ".join(antikeywords)}"""
+                        f"""{hilight("[Skip]", "fail")} Exclude {hilight(item.title)} due to {hilight("excluded keywords", "fail")}{location_detail}: {", ".join(antikeywords)}"""
                     )
                 return False
 
