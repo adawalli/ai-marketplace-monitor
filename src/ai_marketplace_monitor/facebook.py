@@ -537,7 +537,7 @@ class FacebookMarketplace(Marketplace):
                         and len(item_config.keywords) > 0
                     ):
                         if self.logger:
-                            self.logger.error(
+                            self.logger.debug(
                                 f"""{hilight("[Error]", "fail")} Failed to extract description for {hilight(listing.title)} at {listing.post_url}. Keyword filtering will only apply to title."""
                             )
 

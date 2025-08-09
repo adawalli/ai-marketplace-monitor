@@ -330,7 +330,7 @@ class MarketplaceMonitor:
                         )
                         if self.logger:
                             self.logger.info(
-                                f"""{hilight("[Schedule]", "info")} Scheduling to search for {item_config.name} every {humanize.naturaldelta(search_interval)} {'' if search_interval == max_search_interval else f'to {humanize.naturaldelta(max_search_interval)}'}"""
+                                f"""{hilight("[Schedule]", "info")} Scheduling to search for {item_config.name} every {humanize.naturaldelta(search_interval)} {"" if search_interval == max_search_interval else f"to {humanize.naturaldelta(max_search_interval)}"}"""
                             )
                         scheduled = schedule.every(search_interval).to(max_search_interval).seconds
                     if scheduled is None:
