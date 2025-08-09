@@ -527,7 +527,7 @@ class FacebookMarketplace(Marketplace):
                     listing.name = item_config.name
                     if self.logger:
                         self.logger.debug(
-                            f"""{hilight("[Retrieve]", "succ")} New item "{listing.title}" from https://www.facebook.com{listing.post_url} is sold by "{listing.seller}" and with description "{listing.description[:100]}..." """
+                            f"""{hilight("[Retrieve]", "succ")} New item "{listing.title}" from {listing.post_url} is sold by "{listing.seller}" and with description "{listing.description[:100]}..." """
                         )
 
                     # Warn if we never managed to extract a description for keyword-based filtering
