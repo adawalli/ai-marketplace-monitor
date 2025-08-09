@@ -529,6 +529,18 @@ class FacebookMarketplace(Marketplace):
                         self.logger.debug(
                             f"""{hilight("[Retrieve]", "succ")} New item "{listing.title}" from https://www.facebook.com{listing.post_url} is sold by "{listing.seller}" and with description "{listing.description[:100]}..." """
                         )
+
+                    # Warn if we never managed to extract a description for keyword-based filtering
+                    if (
+                        (not listing.description or len(listing.description.strip()) == 0)
+                        and item_config.keywords
+                        and len(item_config.keywords) > 0
+                    ):
+                        if self.logger:
+                            self.logger.error(
+                                f"""{hilight("[Error]", "fail")} Failed to extract description for {hilight(listing.title)} at {listing.post_url}. Keyword filtering will only apply to title."""
+                            )
+
                     if self.check_listing(listing, item_config):
                         yield listing
                     else:
@@ -570,27 +582,48 @@ class FacebookMarketplace(Marketplace):
     def check_listing(
         self: "FacebookMarketplace", item: Listing, item_config: FacebookItemConfig
     ) -> bool:
-        # get antikeywords from both item_config or config
-        antikeywords = item_config.antikeywords
-        if antikeywords and (
-            is_substring(antikeywords, item.title + " " + item.description, logger=self.logger)
-        ):
-            if self.logger:
-                self.logger.info(
-                    f"""{hilight("[Skip]", "fail")} Exclude {hilight(item.title)} due to {hilight("excluded keywords", "fail")}: {', '.join(antikeywords)}"""
-                )
-            return False
+        # Check if we have an empty description and keywords are configured
+        # This indicates we're doing premature filtering before description extraction
+        has_empty_description = not item.description or len(item.description.strip()) == 0
+        has_keywords = item_config.keywords and len(item_config.keywords) > 0
 
-        # if the return description does not contain any of the search keywords
-        keywords = item_config.keywords
-        if keywords and not (
-            is_substring(keywords, item.title + "  " + item.description, logger=self.logger)
-        ):
+        if has_empty_description and has_keywords:
             if self.logger:
-                self.logger.info(
-                    f"""{hilight("[Skip]", "fail")} Exclude {hilight(item.title)} {hilight("without required keywords", "fail")} in title and description."""
+                self.logger.warning(
+                    f"""{hilight("[Warning]", "warn")} Skipping keyword filtering for {hilight(item.title)} - description not yet available. This listing will be re-evaluated after description extraction."""
                 )
-            return False
+            # Skip keyword filtering but continue with other checks
+            # We still check antikeywords in title only for early rejection
+            antikeywords = item_config.antikeywords
+            if antikeywords and (is_substring(antikeywords, item.title, logger=self.logger)):
+                if self.logger:
+                    self.logger.info(
+                        f"""{hilight("[Skip]", "fail")} Exclude {hilight(item.title)} due to {hilight("excluded keywords", "fail")} in title: {', '.join(antikeywords)}"""
+                    )
+                return False
+        else:
+            # Normal filtering when description is available
+            # get antikeywords from both item_config or config
+            antikeywords = item_config.antikeywords
+            if antikeywords and (
+                is_substring(antikeywords, item.title + " " + item.description, logger=self.logger)
+            ):
+                if self.logger:
+                    self.logger.info(
+                        f"""{hilight("[Skip]", "fail")} Exclude {hilight(item.title)} due to {hilight("excluded keywords", "fail")}: {', '.join(antikeywords)}"""
+                    )
+                return False
+
+            # if the return description does not contain any of the search keywords
+            keywords = item_config.keywords
+            if keywords and not (
+                is_substring(keywords, item.title + "  " + item.description, logger=self.logger)
+            ):
+                if self.logger:
+                    self.logger.info(
+                        f"""{hilight("[Skip]", "fail")} Exclude {hilight(item.title)} {hilight("without required keywords", "fail")} in title and description."""
+                    )
+                return False
 
         # get locations from either marketplace config or item config
         if item_config.seller_locations is not None:
