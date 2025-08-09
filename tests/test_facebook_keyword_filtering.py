@@ -28,8 +28,8 @@ def keyword_item_config() -> FacebookItemConfig:
         search_phrases=["EMTB", "electric bike"],
         keywords=["Gen 4", "Bosch", "Bosch CX"],
         antikeywords=None,
-        min_price=1000,
-        max_price=5000,
+        min_price="1000",
+        max_price="5000",
     )
 
 
@@ -178,8 +178,8 @@ def test_antikeyword_filtering_with_empty_description(
         search_phrases=["EMTB"],
         keywords=None,
         antikeywords=["broken", "parts"],  # These should cause rejection
-        min_price=100,
-        max_price=5000,
+        min_price="100",
+        max_price="5000",
     )
 
     # Should be rejected due to antikeywords in title, even with empty description
