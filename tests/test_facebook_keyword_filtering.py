@@ -81,13 +81,13 @@ def test_keyword_filtering_should_skip_when_description_empty(
     # Test the bug: First call should PASS but currently FAILS
     # This simulates the first check_listing() call at line 502
     first_check_result = facebook_marketplace.check_listing(
-        listing_with_empty_description, keyword_item_config
+        listing_with_empty_description, keyword_item_config, description_available=False
     )
 
     # Test the correct behavior: Second call should PASS and currently DOES
     # This simulates the second check_listing() call at line 532
     second_check_result = facebook_marketplace.check_listing(
-        listing_with_populated_description, keyword_item_config
+        listing_with_populated_description, keyword_item_config, description_available=True
     )
 
     # FAILING TEST: This demonstrates the bug
@@ -151,7 +151,9 @@ def test_keyword_filtering_with_populated_description(
         description=listing_data["description"],
     )
 
-    result = facebook_marketplace.check_listing(listing, keyword_item_config)
+    result = facebook_marketplace.check_listing(
+        listing, keyword_item_config, description_available=True
+    )
     assert result == expected_result, f"Keyword filtering {test_description}"
 
 
@@ -184,7 +186,7 @@ def test_antikeyword_filtering_with_empty_description(
 
     # Should be rejected due to antikeywords in title, even with empty description
     result = facebook_marketplace.check_listing(
-        listing_with_empty_description, item_config_with_antikeywords
+        listing_with_empty_description, item_config_with_antikeywords, description_available=False
     )
     assert (
         not result
