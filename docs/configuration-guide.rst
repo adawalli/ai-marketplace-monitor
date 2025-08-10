@@ -401,7 +401,7 @@ Under the hood, _ai-marketplace-monitor_ will simply replace `search_region` wit
 Multi-Currency Support
 ======================
 
-_AI Marketplace Monitor_ does not enforce any specific currency format for price filters. It assumes that the `min_price` and `max_price` values are provided in the currency commonly used in the specified `search_city`. For example, in the configurations below:
+*AI Marketplace Monitor* does not enforce any specific currency format for price filters. It assumes that the `min_price` and `max_price` values are provided in the currency commonly used in the specified `search_city`. For example, in the configurations below:
 
 .. code-block:: toml
 
@@ -439,7 +439,7 @@ All pre-defined regions has a defined `currency`. If you would like to search ac
     min_price = '100 EUR'
     search_region = ['fra', 'gbr']
 
-and _AI Marketplace Monitor_ will automatically convert `100 EUR` to `GBP` when searching United Kingdom.
+and *AI Marketplace Monitor* will automatically convert `100 EUR` to `GBP` when searching United Kingdom.
 
 .. note::
    1. The following currency codes are supported: `USD`, `JPY`, `BGN`, `CYP`, `EUR`, `CZK`, `DKK`, `EEK`, `GBP`, `HUF`, `LTL`, `LVL`, `MTL`, `PLN`, `ROL`, `RON`, `SEK`, `SIT`, `SKK`, `CHF`, `ISK`, `NOK`, `HRK`, `RUB`, `TRL`, `TRY`, `AUD`, `BRL`, `CAD`, `CNY`, `HKD`, `IDR`, `ILS`, `INR`, `KRW`, `MXN`, `MYR`, `NZD`, `PHP`, `SGD`, `THB`, `ZAR`, and `ARS`.
@@ -461,6 +461,8 @@ If you have access to a decent machine and prefer not to pay for AI services fro
 .. note::
    1. Depending on your hardware configuration, you can choose any of the models listed at `ollama.com/library <https://ollama.com/library>`_. The default model is `deepseek-r1:14b` because it appears to work better than `llama-3.1:8b`.
    2. You need to `pull` the model before you can use it.
+
+
 
 Anonymous Search with Proxy
 ===========================
@@ -487,3 +489,102 @@ If you would like to use a proxy server, you can:
     proxy_password = '${PROXY_PASSWORD}'
 
 Replace `${PROXY_SERVER}`, `${PROXY_USERNAME}`, and `${PROXY_PASSWORD}` with your proxy service details, or setting the corresponding environment variables.
+
+
+
+Multiple Marketplaces
+=====================
+
+Although Facebook is currently the only supported marketplace, you can create multiple marketplace configurations such as ``marketplace.city1`` and ``marketplace.city2`` with different options such as ``search_city``, ``search_region``, ``seller_locations``, and ``notify``. You will need to add the ``marketplace`` option in the item sections to link these items to the appropriate marketplace configuration.
+
+For example:
+
+.. code-block:: toml
+
+    [marketplace.facebook]
+    search_city = 'houston'
+    seller_locations = ['houston', 'sugarland']
+
+    [marketplace.nationwide]
+    marketplace = 'facebook'
+    search_region = 'usa'
+    seller_locations = []
+    delivery_method = 'shipping'
+
+    [item.default_item]
+    search_phrases = 'local item for default market "facebook"'
+
+    [item.rare_item1]
+    marketplace = 'nationwide'
+    search_phrases = 'rare item1'
+
+    [item.rare_item2]
+    marketplace = 'nationwide'
+    search_phrases = 'rare item2'
+
+.. note::
+   - The ``marketplace='facebook'`` setting is not needed for the marketplace named ``facebook`` (the first one), but is required for the ``nationwide`` marketplace to specify which marketplace type to use.
+   - If no ``marketplace`` is defined for an item, it will use the first defined marketplace, which is ``facebook`` in this example.
+
+First and Subsequent Searches
+=============================
+
+You can specify a list of two values for the options ``rating``, ``availability``, ``date_listed``, and ``delivery_method``. The first value is used for the initial search, and the second value is used for all subsequent searches. This allows different search strategies for first-time versus ongoing monitoring.
+
+For example, to perform an initial lenient search for all listings followed by searches for only new listings:
+
+.. code-block:: toml
+
+    rating = [2, 4]
+    availability = ["all", "in"]
+    date_listed = ["all", "last 24 hours"]
+
+
+Support for Non-English Languages
+===================================
+
+*AI Marketplace Monitor* relies on specific keywords from webpages to extract relevant information. For example, it looks for words following ``Condition`` to determine the condition of an item. If your Facebook account is set to a non-English language, *AI Marketplace Monitor* will be unable to extract the relevant information. If you see error messages like:
+
+.. code-block:: text
+
+    Failed to get details of listing https://www.facebook.com/marketplace/item/12121212121212121212
+    The listing might be missing key information (e.g. seller) or not in English.
+    Please add option language to your marketplace configuration is the latter is the case.
+    See https://github.com/BoPeng/ai-marketplace-monitor?tab=readme-ov-file#support-for-non-english-languages for details.
+
+you will need to check the ``Settings -> Language`` settings of your Facebook account and configure *AI Marketplace Monitor* to use the same language.
+
+Currently, *AI Marketplace Monitor* supports the following languages:
+
+- ``es``: Spanish
+- ``zh``: Chinese
+
+Setting Up Custom Language Support
+----------------------------------
+
+If your language is not supported, you can define your own ``translator`` section in your configuration file, following the format used by existing translators in `config.toml <https://github.com/BoPeng/ai-marketplace-monitor/blob/main/src/ai_marketplace_monitor/config.toml>`_:
+
+1. **Add a section to your configuration file**, by copying one example from the system translators, for example:
+
+   .. code-block:: toml
+
+       [translator.LAN]
+       locale = "Your REGION"
+       "About this vehicle" = "Descripción del vendedor"
+       "Seller's description" = "Información sobre este vehículo"
+       "Collection of Marketplace items" = "Colección de artículos de Marketplace"
+       "Condition" = "Estado"
+       "Details" = "Detalles"
+       "Location is approximate" = "La ubicación es aproximada"
+       "Description" = "Descripción"
+
+2. **Find example listings** (see `example <https://github.com/BoPeng/ai-marketplace-monitor/issues/29#issuecomment-2632057196>`_), locate the relevant words in your language, and update the translation section. You can switch between different languages in Facebook (Settings -> Language) to compare with the English version.
+
+3. **Add the language setting** to your marketplace configuration:
+
+   .. code-block:: toml
+
+       [marketplace.facebook]
+       language = "LAN"
+
+It would be very helpful for other users of *AI Marketplace Monitor* if you could contribute your dictionary to this project by creating a pull request or simply creating a ticket with your translations.
