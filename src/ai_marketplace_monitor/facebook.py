@@ -535,13 +535,13 @@ class FacebookMarketplace(Marketplace):
                         (not listing.description or len(listing.description.strip()) == 0)
                         and item_config.keywords
                         and len(item_config.keywords) > 0
+                        and self.logger
                     ):
-                        if self.logger:
-                            self.logger.debug(
-                                f"""{hilight("[Error]", "fail")} Failed to extract description for {hilight(listing.title)} at {listing.post_url}. Keyword filtering will only apply to title."""
-                            )
+                        self.logger.debug(
+                            f"""{hilight("[Error]", "fail")} Failed to extract description for {hilight(listing.title)} at {listing.post_url}. Keyword filtering will only apply to title."""
+                        )
 
-                    if self.check_listing(listing, item_config, description_available=True):
+                    if self.check_listing(listing, item_config):
                         yield listing
                     else:
                         counter.increment(CounterItem.EXCLUDED_LISTING, item_config.name)
