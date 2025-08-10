@@ -56,6 +56,8 @@ dev = [
   "bump2version>=1.0.1",
   "watchdog[watchmedo]>=6.0.0",
   "pip-audit>=2.9.0",
+  "build>=1.0.0",
+  "twine>=5.0.0",
 ]
 test = [
   "pytest>=8.3.3",

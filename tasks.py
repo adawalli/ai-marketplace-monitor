@@ -186,3 +186,56 @@ def version(c: Context, part: str, dry_run: bool = False) -> None:
     """Bump version."""
     bump_options = ["--dry-run"] if dry_run else []
     _run(c, f"uv run bump2version {' '.join(bump_options)} {part}")
+
+
+@task(
+    help={
+        "version": "Version to release (e.g., 1.0.0)",
+    }
+)
+def release(c: Context, version: str) -> None:
+    """Release a new version by updating version files and building/uploading to PyPI."""
+    if not version or version.startswith("-"):
+        print("Error: Please provide a valid version number (e.g., inv release --version=1.0.0)")
+        return
+
+    print(f"Releasing version {version}...")
+
+    # Update version in all required files
+    files_to_update = [
+        ("tests/test_aimm.py", 'assert version == "', '"'),
+        ("src/ai_marketplace_monitor/__init__.py", '__version__ = "', '"'),
+        ("pyproject.toml", 'version = "', '"'),
+    ]
+
+    for file_path, prefix, suffix in files_to_update:
+        print(f"Updating version in {file_path}")
+        with open(file_path, "r") as f:
+            content = f.read()
+
+        # Find and replace the version line
+        lines = content.split("\n")
+        for i, line in enumerate(lines):
+            if prefix in line:
+                start = line.find(prefix) + len(prefix)
+                end = line.find(suffix, start)
+                if end != -1:
+                    lines[i] = line[:start] + version + line[end:]
+                    break
+
+        with open(file_path, "w") as f:
+            f.write("\n".join(lines))
+
+    # Clean previous builds
+    print("Cleaning previous builds...")
+    _run(c, "rm -fr build/ dist/ *.egg-info")
+
+    # Build the package
+    print("Building package...")
+    _run(c, "uv run python -m build")
+
+    # Upload to PyPI
+    print("Uploading to PyPI...")
+    _run(c, "uv run python -m twine upload dist/*")
+
+    print(f"Successfully released version {version}!")
